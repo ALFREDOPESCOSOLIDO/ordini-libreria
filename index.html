@@ -190,6 +190,7 @@
     <a id="nav-importa-pdf" onclick="navTo('importa-pdf')">📥 Importa PDF adozioni</a>
     <div class="sidebar-section">Fornitori</div>
     <a id="nav-ord-forn"  onclick="navTo('ord-forn')">🏭 Ordini fornitore</a>
+    <a id="nav-carico-merce" onclick="navTo('carico-merce')">📦 Carico merce</a>
     <div class="sidebar-spacer"></div>
     <div class="sidebar-bottom">
       <a onclick="doLogout()" style="color:rgba(255,255,255,.45);font-size:.85rem">🚪 Esci</a>
@@ -712,6 +713,55 @@
           <button class="btn btn-secondary" onclick="annullaFormCliente()">Annulla</button>
           <button class="btn btn-primary" onclick="salvaCliente()">💾 Salva</button>
         </div>
+      </div>
+    </div>
+
+    <!-- ══ CARICO MERCE ══════════════════════════════════ -->
+    <div id="page-carico-merce" class="page">
+      <div class="header-bar">
+        <div class="page-title">📦 Carico merce</div>
+      </div>
+      <div class="section-card">
+        <h3 style="margin-top:0">Scansiona ISBN del libro ricevuto</h3>
+        <p class="text-muted text-sm" style="margin-bottom:1rem">Il sistema individua tutti gli ordini aperti per quel libro, dal più vecchio al più recente, e li evade in ordine.</p>
+        <div style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap">
+          <div class="form-group" style="flex:1;min-width:220px;margin-bottom:0">
+            <label>ISBN (scansiona barcode o digita)</label>
+            <input type="text" id="cm-isbn" placeholder="9788826822211…" oninput="cercaLibroCarico(this.value)" autocomplete="off" style="font-size:1.1rem">
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="resetCarico()">✕ Cancella</button>
+        </div>
+      </div>
+
+      <div id="cm-risultato" style="display:none" class="section-card">
+        <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;flex-wrap:wrap">
+          <div style="flex:1">
+            <strong id="cm-titolo" style="font-size:1rem"></strong>
+            <span id="cm-autore" class="text-muted text-sm" style="display:block"></span>
+          </div>
+          <span style="font-family:monospace;font-size:.8rem;color:#718096" id="cm-isbn-label"></span>
+        </div>
+
+        <table style="width:100%;border-collapse:collapse;margin-bottom:1rem">
+          <thead><tr style="background:#edf2f7">
+            <th style="padding:7px 8px;font-size:.75rem;text-align:left">Data ordine</th>
+            <th style="padding:7px 8px;font-size:.75rem;text-align:left">Fornitore</th>
+            <th style="padding:7px 8px;font-size:.75rem;text-align:left">Cliente</th>
+            <th style="padding:7px 8px;font-size:.75rem;text-align:center">Ordinati</th>
+            <th style="padding:7px 8px;font-size:.75rem;text-align:center">Arrivati</th>
+            <th style="padding:7px 8px;font-size:.75rem;text-align:center;color:#c53030">Mancanti</th>
+          </tr></thead>
+          <tbody id="cm-righe-tb"></tbody>
+        </table>
+
+        <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+          <div class="form-group" style="margin-bottom:0">
+            <label>Copie ricevute adesso</label>
+            <input type="number" id="cm-qty" min="1" value="1" style="width:90px;font-size:1.1rem;font-weight:700">
+          </div>
+          <button class="btn btn-success" onclick="registraCarico()" style="align-self:flex-end">✅ Registra carico</button>
+        </div>
+        <div id="cm-msg" style="display:none;margin-top:.75rem;padding:.75rem 1rem;border-radius:8px;font-size:.9rem"></div>
       </div>
     </div>
 
@@ -1459,16 +1509,25 @@ async function aprireOrdForn(id) {
       sb.from('arrivi_fornitore').select('*,righe_arrivo(quantita,riga_ordine_fornitore_id)').eq('ordine_fornitore_id',id).order('data'),
     ]);
 
-    // Recupera nomi clienti con una sola query
+    // Recupera dati completi (cliente + autore/editore/prezzo) da righe_ordine
     const rigaIds = (righe||[]).map(r=>r.riga_ordine_id).filter(Boolean);
-    let clientiMap = {};
+    let roMap = {};
     if (rigaIds.length) {
       const {data:ros} = await sb.from('righe_ordine')
-        .select('id,ordini(clienti(nome,cognome))')
+        .select('id,autore,editore,prezzo,ordini(data_ordine,clienti(nome,cognome))')
         .in('id', rigaIds);
-      (ros||[]).forEach(ro => { clientiMap[ro.id] = ro; });
+      (ros||[]).forEach(ro => { roMap[ro.id] = ro; });
     }
-    const righeConCliente = (righe||[]).map(r => ({...r, righe_ordine: clientiMap[r.riga_ordine_id]||null}));
+    const righeConCliente = (righe||[]).map(r => {
+      const ro = roMap[r.riga_ordine_id] || null;
+      return {
+        ...r,
+        autore:  r.autore  || ro?.autore  || '',
+        editore: r.editore || ro?.editore || '',
+        prezzo:  r.prezzo  || ro?.prezzo  || 0,
+        righe_ordine: ro,
+      };
+    });
 
     load(false);
     _ordFornitoreCache={of, righe:righeConCliente, arrivi:arrivi||[]};
@@ -2061,6 +2120,117 @@ async function confermaImportaPdf() {
 }
 
 boot();
+
+// ══════════════════════════════════════════════════════
+//  CARICO MERCE
+// ══════════════════════════════════════════════════════
+let _caricoRighe = [];  // righe aperte per ISBN corrente
+
+function resetCarico() {
+  document.getElementById('cm-isbn').value = '';
+  document.getElementById('cm-risultato').style.display = 'none';
+  document.getElementById('cm-msg').style.display = 'none';
+  _caricoRighe = [];
+}
+
+let _caricoTimer = null;
+function cercaLibroCarico(isbn) {
+  clearTimeout(_caricoTimer);
+  isbn = isbn.trim();
+  if (isbn.length < 10) { document.getElementById('cm-risultato').style.display = 'none'; return; }
+  _caricoTimer = setTimeout(() => _caricaRigheIsbn(isbn), 400);
+}
+
+async function _caricaRigheIsbn(isbn) {
+  load(true);
+  // Tutte le righe_ordine_fornitore per questo ISBN con mancanti > 0
+  const { data: righe } = await sb.from('righe_ordine_fornitore')
+    .select('*,ordini_fornitore(id,data_ordine,fornitore),righe_ordine(ordini(clienti(nome,cognome)))')
+    .eq('isbn', isbn)
+    .order('created_at');
+
+  // Filtra solo quelle con copie ancora mancanti
+  const aperte = (righe||[]).filter(r => (r.quantita_arrivata||0) < r.quantita);
+
+  load(false);
+
+  if (!aperte.length && !(righe||[]).length) {
+    document.getElementById('cm-risultato').style.display = 'none';
+    alert('ISBN non trovato in nessun ordine fornitore.');
+    return;
+  }
+
+  // Ordina per data ordine ASC (più vecchio prima)
+  aperte.sort((a,b) => new Date(a.ordini_fornitore?.data_ordine) - new Date(b.ordini_fornitore?.data_ordine));
+  _caricoRighe = aperte;
+
+  // Informazioni libro dalla prima riga
+  const primaRiga = (righe||[])[0] || aperte[0];
+  document.getElementById('cm-isbn-label').textContent = isbn;
+  document.getElementById('cm-titolo').textContent = primaRiga?.titolo || '—';
+  document.getElementById('cm-autore').textContent  = primaRiga?.autore  || '';
+
+  const totMancanti = aperte.reduce((s,r) => s + r.quantita - (r.quantita_arrivata||0), 0);
+  document.getElementById('cm-qty').value = Math.min(totMancanti, totMancanti);
+  document.getElementById('cm-qty').max   = totMancanti;
+
+  document.getElementById('cm-righe-tb').innerHTML = aperte.length === 0
+    ? '<tr><td colspan="6" class="text-muted" style="padding:1rem;text-align:center">Tutte le copie sono già arrivate</td></tr>'
+    : aperte.map((r,i) => {
+        const manca = r.quantita - (r.quantita_arrivata||0);
+        const cliente = nomeC(r.righe_ordine?.ordini?.clienti) || '—';
+        return `<tr style="background:${i%2?'#f9fafb':'#fff'}">
+          <td style="padding:6px 8px;font-size:.85rem">${fmtDate(r.ordini_fornitore?.data_ordine)}</td>
+          <td style="padding:6px 8px;font-size:.85rem">${r.ordini_fornitore?.fornitore||'—'}</td>
+          <td style="padding:6px 8px;font-size:.85rem">${cliente}</td>
+          <td style="padding:6px 8px;text-align:center">${r.quantita}</td>
+          <td style="padding:6px 8px;text-align:center">${r.quantita_arrivata||0}</td>
+          <td style="padding:6px 8px;text-align:center;font-weight:700;color:#c53030">${manca}</td>
+        </tr>`;
+      }).join('');
+
+  document.getElementById('cm-msg').style.display = 'none';
+  document.getElementById('cm-risultato').style.display = 'block';
+}
+
+async function registraCarico() {
+  const qty = parseInt(document.getElementById('cm-qty').value) || 0;
+  if (qty <= 0) { alert('Inserisci una quantità valida'); return; }
+  if (!_caricoRighe.length) return;
+
+  load(true);
+  let rimaste = qty;
+
+  for (const riga of _caricoRighe) {
+    if (rimaste <= 0) break;
+    const manca = riga.quantita - (riga.quantita_arrivata||0);
+    const daAssegnare = Math.min(rimaste, manca);
+    const nuovaQty = (riga.quantita_arrivata||0) + daAssegnare;
+    await sb.from('righe_ordine_fornitore')
+      .update({ quantita_arrivata: nuovaQty })
+      .eq('id', riga.id);
+    // Aggiorna anche quantita_arrivata su righe_ordine se completato
+    if (riga.riga_ordine_id && nuovaQty >= riga.quantita) {
+      await sb.from('righe_ordine').update({ quantita_arrivata: riga.quantita }).eq('id', riga.riga_ordine_id);
+    }
+    rimaste -= daAssegnare;
+  }
+
+  load(false);
+
+  const assegnate = qty - rimaste;
+  const msg = document.getElementById('cm-msg');
+  msg.style.display = 'block';
+  msg.style.background = rimaste > 0 ? '#fffbeb' : '#f0fff4';
+  msg.style.border = `1px solid ${rimaste>0?'#f6c90e':'#9ae6b4'}`;
+  msg.innerHTML = rimaste > 0
+    ? `✅ ${assegnate} cop. registrate. <strong>${rimaste} cop. in eccesso</strong> — non ci sono altri ordini aperti per questo ISBN.`
+    : `✅ ${assegnate} cop. registrate correttamente. Ordini evasi dal più vecchio al più recente.`;
+
+  // Ricarica la tabella per aggiornare i conteggi
+  const isbn = document.getElementById('cm-isbn').value.trim();
+  await _caricaRigheIsbn(isbn);
+}
 </script>
 </body>
 </html>
