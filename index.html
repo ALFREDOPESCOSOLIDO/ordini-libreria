@@ -838,7 +838,7 @@ async function onClienteSelezionato() {
         <input type="checkbox" id="lc-${b.id}" data-libro='${JSON.stringify(b).replace(/'/g,"&#39;")}' checked style="width:auto;flex-shrink:0">
         <label for="lc-${b.id}" style="flex:1;cursor:pointer">
           <span style="font-size:.72rem;color:#718096;font-family:monospace">${b.isbn||'—'}</span>
-          <strong style="display:block">${b.materia} — ${b.titolo}</strong>
+          <strong style="display:block">${b.materia}${b.volume?' Vol. '+b.volume:''} — ${b.titolo}</strong>
           <span class="text-muted" style="font-size:.78rem">${b.autore||''} · ${b.editore||''}</span>
         </label>
         <span style="font-weight:700;color:#276749;white-space:nowrap">€ ${fmt(b.prezzo)}</span>
@@ -874,12 +874,12 @@ async function cercaCatalogo() {
   if (q.length < 2) { dd.style.display = 'none'; return; }
   _catTimer = setTimeout(async () => {
     const { data } = await sb.from('catalogo_libri')
-      .select('id,isbn,titolo,autore,editore,prezzo')
-      .or(`isbn.ilike.%${q}%,titolo.ilike.%${q}%`)
+      .select('id,isbn,titolo,volume,autore,editore,prezzo,materia')
+      .or(`isbn.ilike.%${q}%,titolo.ilike.%${q}%,materia.ilike.%${q}%`)
       .limit(12);
     if (!(data||[]).length) { dd.innerHTML = '<div class="cat-item text-muted">Nessun risultato</div>'; dd.style.display='block'; return; }
     dd.innerHTML = data.map(b => `<div class="cat-item" onclick="aggiungiDaCatalogo(${JSON.stringify(b).replace(/"/g,'&quot;')})">
-      <div><strong>${b.titolo}</strong> <span style="color:#38a169;font-weight:700">€ ${fmt(b.prezzo)}</span></div>
+      <div><strong>${b.materia||''}${b.volume?' Vol. '+b.volume:''} — ${b.titolo}</strong> <span style="color:#38a169;font-weight:700">€ ${fmt(b.prezzo)}</span></div>
       <div class="cat-isbn">${b.isbn||''} · ${b.autore||''} · ${b.editore||''}</div>
     </div>`).join('');
     dd.style.display = 'block';
@@ -902,7 +902,7 @@ function addLibroRow(b) {
   d.className = 'libro-input-row';
   d.innerHTML = `
     <input type="text" placeholder="ISBN" class="r-isbn" value="${b?.isbn||''}">
-    <input type="text" placeholder="Titolo *" class="r-titolo" value="${b?.titolo||''}">
+    <input type="text" placeholder="Titolo *" class="r-titolo" value="${b?.titolo?(b.titolo+(b.volume?' Vol.'+b.volume:'')):''}" >
     <input type="text" placeholder="Autore" class="r-autore" value="${b?.autore||''}">
     <input type="text" placeholder="Editore" class="r-editore" value="${b?.editore||''}">
     <input type="number" placeholder="0.00" class="r-prezzo" min="0" step="0.01" value="${b?.prezzo||''}" oninput="aggRiepilogo()">
