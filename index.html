@@ -2184,8 +2184,11 @@ function cercaLibroCarico(isbn) {
 async function _caricaRigheIsbn(isbn) {
   load(true);
   // Step 1: righe ordine fornitore per ISBN
-  const { data: righe } = await sb.from('righe_ordine_fornitore')
+  // prova prima senza filtro isbn per vedere quante righe ci sono in totale
+  const { data: tutteRighe } = await sb.from('righe_ordine_fornitore').select('id,isbn').limit(3);
+  const { data: righe, error: eRighe } = await sb.from('righe_ordine_fornitore')
     .select('*').eq('isbn', isbn).order('created_at');
+  alert('Totale sample:'+tutteRighe?.length+' isbn[0]:'+tutteRighe?.[0]?.isbn+'\nFiltro isbn='+isbn+' → '+righe?.length+' righe\nErr:'+(eRighe?.message||'ok'));
 
   if (!(righe||[]).length) {
     load(false);
