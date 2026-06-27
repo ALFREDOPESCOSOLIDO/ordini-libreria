@@ -2204,11 +2204,11 @@ async function _caricaRigheIsbn(isbn) {
   }
 
   // Step 2: dati ordine fornitore (data, fornitore)
-  const ofIds = [...new Set(righe.map(r=>r.ordine_fornitore_id).filter(Boolean))];
+  const ofIds2 = [...new Set(righe.map(r=>r.ordine_fornitore_id).filter(Boolean))];
   let ofMap = {};
-  if (ofIds.length) {
-    const {data:ofs} = await sb.from('ordini_fornitore').select('id,data_ordine,fornitore').in('id', ofIds);
-    (ofs||[]).forEach(o => { ofMap[o.id] = o; });
+  if (ofIds2.length) {
+    const {data:ofs2} = await sb.from('ordini_fornitore').select('id,data_ordine,fornitore').in('id', ofIds2);
+    (ofs2||[]).forEach(o => { ofMap[o.id] = o; });
   }
 
   // Step 3: nome cliente tramite riga_ordine_id → righe_ordine → ordini → clienti
