@@ -1570,14 +1570,15 @@ function renderDetOrdForn() {
 async function stampaPdfOrdForn() {
   try {
   const id = _ordFornitoreId;
-  const righeArricchiteTest = _ordFornitoreCache?.righe||[];
-  alert('v7 — id:'+id+' | cache:'+righeArricchiteTest.length+' | primo prezzo:'+(righeArricchiteTest[0]?.prezzo||'n/a'));
   if (!id) { alert('Nessun ordine aperto'); return; }
   load(true);
 
   // Step 1: righe ordine fornitore
   const {data:of} = await sb.from('ordini_fornitore').select('*').eq('id',id).single();
   const {data:righe} = await sb.from('righe_ordine_fornitore').select('*').eq('ordine_fornitore_id',id);
+
+  const r0 = righe?.[0]||{};
+  alert('Campi riga0: '+Object.keys(r0).join(', ')+'\nriga_ordine_id: '+r0.riga_ordine_id+'\nprezzo: '+r0.prezzo);
 
   // Step 2: dati da righe_ordine (autore, editore, prezzo, ordine_id)
   const rigaIds = (righe||[]).map(r=>r.riga_ordine_id).filter(Boolean);
