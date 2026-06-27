@@ -1577,14 +1577,13 @@ async function stampaPdfOrdForn() {
   const {data:of} = await sb.from('ordini_fornitore').select('*').eq('id',id).single();
   const {data:righe} = await sb.from('righe_ordine_fornitore').select('*').eq('ordine_fornitore_id',id);
 
-  const r0 = righe?.[0]||{};
-  alert('Campi riga0: '+Object.keys(r0).join(', ')+'\nriga_ordine_id: '+r0.riga_ordine_id+'\nprezzo: '+r0.prezzo);
 
   // Step 2: dati da righe_ordine (autore, editore, prezzo, ordine_id)
   const rigaIds = (righe||[]).map(r=>r.riga_ordine_id).filter(Boolean);
   let roMap = {};
   if (rigaIds.length) {
-    const {data:ros} = await sb.from('righe_ordine').select('id,autore,editore,prezzo_unitario,ordine_id').in('id', rigaIds);
+    const {data:ros, error:eRos} = await sb.from('righe_ordine').select('id,autore,editore,prezzo_unitario,ordine_id').in('id', rigaIds);
+    alert('Step2 — rigaIds:'+rigaIds.length+' ros:'+( ros?.length??'null')+' err:'+(eRos?.message||'ok')+'\npr0:'+JSON.stringify(ros?.[0]||{}));
     (ros||[]).forEach(ro => { roMap[ro.id] = ro; });
   }
 
@@ -1667,12 +1666,18 @@ async function stampaPdfOrdForn() {
       <td style="text-align:right;padding:8px">€ ${fmt(totImporto)}</td>
     </tr></tfoot>
   </table>
-  <script>window.onload=()=>window.print()<\/script>
   </body></html>`;
 
-  const w = window.open('', '_blank');
-  w.document.write(html);
-  w.document.close();
+  // Usa iframe nascosto per evitare blocco popup
+  let iframe = document.getElementById('_print-iframe');
+  if (!iframe) {
+    iframe = document.createElement('iframe');
+    iframe.id = '_print-iframe';
+    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:0';
+    document.body.appendChild(iframe);
+  }
+  iframe.onload = () => { iframe.contentWindow.focus(); iframe.contentWindow.print(); };
+  iframe.srcdoc = html;
   } catch(e) { load(false); alert('Errore stampa: ' + e.message); }
 }
 
