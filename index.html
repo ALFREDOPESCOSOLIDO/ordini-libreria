@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ordini Libreria</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.min.mjs" type="module"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: system-ui, -apple-system, sans-serif; background: #f0f4f8; color: #1a202c; min-height: 100vh; }
@@ -187,6 +188,7 @@
     <a id="nav-clienti"   onclick="navTo('clienti')">👤 Clienti</a>
     <div class="sidebar-section">Catalogo</div>
     <a id="nav-catalogo"  onclick="navTo('catalogo')">📖 Catalogo libri</a>
+    <a id="nav-importa-pdf" onclick="navTo('importa-pdf')">📥 Importa PDF adozioni</a>
     <div class="sidebar-section">Fornitori</div>
     <a id="nav-ord-forn"  onclick="navTo('ord-forn')">🏭 Ordini fornitore</a>
     <div class="sidebar-spacer"></div>
@@ -501,6 +503,56 @@
       </div>
     </div>
 
+    <!-- IMPORTA PDF ADOZIONI -->
+    <div id="page-importa-pdf" class="page">
+      <div class="page-title">📥 Importa PDF adozioni</div>
+      <div class="section-card" style="max-width:700px">
+        <p style="margin-bottom:1rem;color:#4a5568">Carica un PDF scaricato dal sito AIE/MiUR. Il sistema leggerà automaticamente scuola, classe e libri, importando solo quelli con <strong>Da Acq. = Si</strong>.</p>
+        <div style="border:2px dashed #cbd5e0;border-radius:8px;padding:2rem;text-align:center;margin-bottom:1rem;cursor:pointer" onclick="document.getElementById('pdf-file-input').click()" id="pdf-drop-area">
+          <div style="font-size:2.5rem;margin-bottom:.5rem">📄</div>
+          <div style="font-weight:600;color:#2d3748">Clicca per selezionare il PDF</div>
+          <div style="font-size:.85rem;color:#718096;margin-top:.25rem">File scaricato da AIE o dal sito della scuola</div>
+          <input type="file" id="pdf-file-input" accept=".pdf" style="display:none" onchange="caricaPdfAdozioni(this.files[0])">
+        </div>
+        <div id="pdf-loading" style="display:none;text-align:center;color:#4a5568;padding:1rem">
+          ⏳ Elaborazione PDF in corso…
+        </div>
+        <div id="pdf-preview" style="display:none">
+          <div style="background:#ebf8ff;border:1px solid #90cdf4;border-radius:8px;padding:1rem;margin-bottom:1rem">
+            <div style="font-size:.8rem;color:#2b6cb0;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.5rem">Dati rilevati dal PDF</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;font-size:.9rem">
+              <div><span style="color:#718096">Scuola:</span> <strong id="pdf-scuola-nome"></strong></div>
+              <div><span style="color:#718096">Classe:</span> <strong id="pdf-classe-nome"></strong></div>
+              <div><span style="color:#718096">Corso:</span> <strong id="pdf-corso-nome"></strong></div>
+              <div><span style="color:#718096">Anno:</span> <strong id="pdf-anno-nome"></strong></div>
+            </div>
+            <div style="margin-top:.75rem;font-size:.85rem">
+              <label style="font-weight:600;display:block;margin-bottom:.25rem">Tipo scuola</label>
+              <select id="pdf-tipo-scuola" style="padding:.35rem .6rem;border:1px solid #cbd5e0;border-radius:6px">
+                <option value="superiori">Scuola Superiore</option>
+                <option value="medie">Scuola Media</option>
+              </select>
+            </div>
+          </div>
+          <div style="font-weight:600;margin-bottom:.5rem;color:#2d3748">
+            Libri da importare (<span id="pdf-count">0</span> con Da Acq. = Si):
+          </div>
+          <div id="pdf-libri-list" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:1rem;max-height:400px;overflow-y:auto"></div>
+          <div id="pdf-err" class="alert alert-error" style="display:none"></div>
+          <div class="flex" style="gap:.75rem;justify-content:flex-end">
+            <button class="btn btn-secondary" onclick="resetImportaPdf()">✕ Annulla</button>
+            <button class="btn btn-success" onclick="confermaImportaPdf()">✅ Importa nel catalogo</button>
+          </div>
+        </div>
+        <div id="pdf-success" style="display:none;background:#f0fff4;border:1px solid #9ae6b4;border-radius:8px;padding:1.25rem;text-align:center">
+          <div style="font-size:1.5rem;margin-bottom:.5rem">✅</div>
+          <div style="font-weight:700;color:#276749;margin-bottom:.25rem">Importazione completata!</div>
+          <div id="pdf-success-msg" style="color:#4a5568;font-size:.9rem;margin-bottom:1rem"></div>
+          <button class="btn btn-teal" onclick="navTo('catalogo')">Vai al catalogo</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ORDINI FORNITORE — LISTA -->
     <div id="page-ord-forn" class="page">
       <div class="header-bar">
@@ -722,6 +774,7 @@ function navTo(name) {
   const nav = document.getElementById('nav-' + name);
   if (pg)  pg.classList.add('active');
   if (nav) nav.classList.add('active');
+  if (name === 'importa-pdf') resetImportaPdf();
   const loaders = { dashboard: loadDashboard, ordini: loadOrdini, clienti: loadClienti, 'ord-forn': loadOrdForn, catalogo: loadCatalogo };
   if (loaders[name]) loaders[name]();
 }
@@ -1597,6 +1650,232 @@ function show(id)  { document.getElementById(id).style.display='block'; }
 function hide(id)  { document.getElementById(id).style.display='none'; }
 function hideEl(id){ document.getElementById(id).style.display='none'; }
 function showErr(id,msg){ const el=document.getElementById(id); el.textContent=msg; el.style.display='block'; }
+
+// ── Importa PDF adozioni ─────────────────────────────
+let _pdfLibri = [];
+let _pdfMeta  = {};
+
+function resetImportaPdf() {
+  document.getElementById('pdf-preview').style.display = 'none';
+  document.getElementById('pdf-success').style.display = 'none';
+  document.getElementById('pdf-loading').style.display = 'none';
+  document.getElementById('pdf-drop-area').style.display = 'block';
+  document.getElementById('pdf-file-input').value = '';
+  _pdfLibri = []; _pdfMeta = {};
+}
+
+async function caricaPdfAdozioni(file) {
+  if (!file) return;
+  document.getElementById('pdf-drop-area').style.display = 'none';
+  document.getElementById('pdf-loading').style.display = 'block';
+  document.getElementById('pdf-preview').style.display = 'none';
+  document.getElementById('pdf-success').style.display = 'none';
+
+  try {
+    const pdfjsLib = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.min.mjs');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.mjs';
+
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+    let allItems = [];
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent();
+      const vp = page.getViewport({ scale: 1 });
+      content.items.forEach(item => {
+        const tx = pdfjsLib.Util.transform(vp.transform, item.transform);
+        allItems.push({ str: item.str.trim(), x: Math.round(tx[4]), y: Math.round(vp.height - tx[5]) });
+      });
+    }
+
+    // Raggruppa per riga (y ±6px)
+    allItems = allItems.filter(i => i.str);
+    const rows = [];
+    allItems.forEach(item => {
+      const row = rows.find(r => Math.abs(r.y - item.y) <= 6);
+      if (row) { row.items.push(item); row.y = Math.round((row.y + item.y) / 2); }
+      else rows.push({ y: item.y, items: [item] });
+    });
+    rows.sort((a, b) => a.y - b.y);
+    rows.forEach(r => r.items.sort((a, b) => a.x - b.x));
+
+    // Estrai metadati
+    const fullText = allItems.map(i => i.str).join(' ');
+    const classe = (fullText.match(/Classe:\s*([^\s]+(?:\s+[A-Z]+)?)/i) || [])[1] || '';
+    const corso  = (fullText.match(/Corso:\s*(.+?)(?:Anno|$)/i) || [])[1]?.trim() || '';
+    const anno   = (fullText.match(/Anno Scolastico\s+([\d/]+)/i) || [])[1] || '2026/2027';
+
+    // Cerca nome scuola (prima riga di testo significativa)
+    const scuola = rows[0]?.items?.[0]?.str || '';
+
+    _pdfMeta = { classe: classe.replace(/\s+/g,''), corso, anno, scuola };
+
+    // Trova riga header tabella (contiene "Materia")
+    const headerRowIdx = rows.findIndex(r => r.items.some(i => /^Materia/i.test(i.str)));
+    if (headerRowIdx < 0) throw new Error('Struttura PDF non riconosciuta. Assicurati di usare un PDF scaricato da AIE.');
+
+    const headerRow = rows[headerRowIdx];
+    // Rileva posizioni x delle colonne dalla riga header
+    const colX = {};
+    headerRow.items.forEach(it => {
+      const s = it.str.toLowerCase();
+      if (s.includes('materia'))   colX.materia  = it.x;
+      if (s.includes('codice'))    colX.isbn     = it.x;
+      if (s.includes('autore'))    colX.autore   = it.x;
+      if (s.includes('titolo'))    colX.titolo   = it.x;
+      if (s.includes('vol'))       colX.volume   = it.x;
+      if (s.includes('editore'))   colX.editore  = it.x;
+      if (s.includes('prezzo'))    colX.prezzo   = it.x;
+      if (s.includes('da') || s.includes('acq')) colX.daacq = it.x;
+    });
+
+    // Se "Da" e "Acq." sono su celle separate, prendi la x di "Acq."
+    if (!colX.daacq) {
+      const daItem  = headerRow.items.find(i => i.str.toLowerCase() === 'da');
+      const acqItem = headerRow.items.find(i => /acq/i.test(i.str));
+      if (acqItem) colX.daacq = acqItem.x;
+      else if (daItem) colX.daacq = daItem.x;
+    }
+
+    // Funzione per assegnare un item a una colonna
+    const colNames = ['materia','isbn','autore','titolo','volume','editore','prezzo','daacq'];
+    function getCol(x) {
+      const sorted = colNames.filter(c => colX[c] !== undefined).sort((a,b) => colX[a]-colX[b]);
+      let best = sorted[0];
+      for (const c of sorted) { if (x >= colX[c] - 10) best = c; }
+      return best;
+    }
+
+    // Scorri le righe dati dopo l'header
+    _pdfLibri = [];
+    let current = null;
+    for (let ri = headerRowIdx + 1; ri < rows.length; ri++) {
+      const row = rows[ri];
+      // Skip righe vuote o note a piè
+      if (row.items.every(i => /^(Data|Pag\.|^\d+$)/.test(i.str))) break;
+
+      // Mappa item → colonne
+      const cells = {};
+      row.items.forEach(it => {
+        const col = getCol(it.x);
+        cells[col] = (cells[col] ? cells[col] + ' ' : '') + it.str;
+      });
+
+      // Se c'è ISBN → nuova riga libro
+      if (cells.isbn && /^\d{10,13}$/.test(cells.isbn.replace(/\s/g,''))) {
+        if (current) _pdfLibri.push(current);
+        current = {
+          materia: cells.materia || '',
+          isbn:    cells.isbn.replace(/\s/g,''),
+          autore:  cells.autore  || '',
+          titolo:  cells.titolo  || '',
+          volume:  cells.volume  || '',
+          editore: cells.editore || '',
+          prezzo:  parseFloat((cells.prezzo||'0').replace(',','.')) || 0,
+          daacq:   (cells.daacq || '').toLowerCase().includes('si') || (cells.daacq||'').toLowerCase().includes('sì'),
+        };
+      } else if (current) {
+        // Riga di continuazione — aggiungi al campo precedente
+        Object.entries(cells).forEach(([col, val]) => {
+          if (col && current[col] !== undefined && col !== 'isbn') current[col] += ' ' + val;
+        });
+        if (!cells.daacq && row.items.length === 1) {
+          // potrebbe essere continuation di titolo/materia
+          current.titolo += ' ' + row.items.map(i=>i.str).join(' ');
+        }
+      }
+    }
+    if (current) _pdfLibri.push(current);
+
+    // Filtra solo Da Acq. = Si
+    const daAcquistare = _pdfLibri.filter(b => b.daacq);
+
+    // Mostra preview
+    document.getElementById('pdf-loading').style.display = 'none';
+    document.getElementById('pdf-scuola-nome').textContent = _pdfMeta.scuola;
+    document.getElementById('pdf-classe-nome').textContent = _pdfMeta.classe;
+    document.getElementById('pdf-corso-nome').textContent  = _pdfMeta.corso;
+    document.getElementById('pdf-anno-nome').textContent   = _pdfMeta.anno;
+    document.getElementById('pdf-count').textContent = daAcquistare.length;
+
+    document.getElementById('pdf-libri-list').innerHTML = daAcquistare.length === 0
+      ? '<div style="padding:1rem;color:#718096;text-align:center">Nessun libro con Da Acq. = Si trovato</div>'
+      : daAcquistare.map((b,i) => `
+        <div style="display:grid;grid-template-columns:1fr auto;align-items:start;padding:.65rem 1rem;border-bottom:1px solid #e2e8f0;font-size:.85rem;${i%2?'background:#f7fafc':''}">
+          <div>
+            <span style="font-family:monospace;font-size:.75rem;color:#718096">${b.isbn}</span>
+            <strong style="display:block">${b.materia}${b.volume?' Vol.'+b.volume:''} — ${b.titolo.trim()}</strong>
+            <span style="color:#718096">${b.autore} · ${b.editore}</span>
+          </div>
+          <span style="font-weight:700;color:#276749;white-space:nowrap;padding-left:1rem">€ ${fmt(b.prezzo)}</span>
+        </div>`).join('');
+
+    document.getElementById('pdf-preview').style.display = 'block';
+  } catch(e) {
+    document.getElementById('pdf-loading').style.display = 'none';
+    document.getElementById('pdf-drop-area').style.display = 'block';
+    alert('Errore lettura PDF: ' + e.message);
+  }
+}
+
+async function confermaImportaPdf() {
+  const tipo  = document.getElementById('pdf-tipo-scuola').value;
+  const classe = _pdfMeta.classe;
+  const scuola = _pdfMeta.scuola;
+  const anno   = _pdfMeta.anno;
+  const libri  = _pdfLibri.filter(b => b.daacq);
+
+  if (!libri.length) { alert('Nessun libro da importare'); return; }
+
+  document.getElementById('pdf-err').style.display = 'none';
+  load(true);
+  try {
+    // Cerca sort_order massimo esistente per non sovrascrivere
+    const { data: maxRow } = await sb.from('catalogo_libri').select('sort_order').order('sort_order', { ascending: false }).limit(1);
+    let nextOrder = ((maxRow?.[0]?.sort_order) || 0) + 10;
+
+    const rows = libri.map((b, i) => ({
+      isbn:            b.isbn,
+      titolo:          b.titolo.trim(),
+      autore:          b.autore.trim(),
+      editore:         b.editore.trim(),
+      prezzo:          b.prezzo,
+      volume:          b.volume || null,
+      materia:         b.materia.trim(),
+      tipo_scuola:     tipo,
+      scuola:          scuola,
+      classi:          [classe],
+      anno_scolastico: anno,
+      da_acquistare:   true,
+      sort_order:      nextOrder + i * 10,
+    }));
+
+    // Upsert per ISBN+classe (evita duplicati)
+    for (const row of rows) {
+      const { data: existing } = await sb.from('catalogo_libri')
+        .select('id, classi')
+        .eq('isbn', row.isbn)
+        .single();
+      if (existing) {
+        // Aggiungi classe se non già presente
+        const classiAggiornate = [...new Set([...(existing.classi||[]), classe])];
+        await sb.from('catalogo_libri').update({ classi: classiAggiornate }).eq('id', existing.id);
+      } else {
+        await sb.from('catalogo_libri').insert(row);
+      }
+    }
+
+    load(false);
+    document.getElementById('pdf-preview').style.display = 'none';
+    document.getElementById('pdf-success-msg').textContent =
+      `Importati ${libri.length} libri per la classe ${classe} — ${scuola}`;
+    document.getElementById('pdf-success').style.display = 'block';
+  } catch(e) {
+    load(false);
+    showErr('pdf-err', 'Errore importazione: ' + e.message);
+  }
+}
 
 boot();
 </script>
