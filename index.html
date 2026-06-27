@@ -1569,28 +1569,35 @@ function renderDetOrdForn() {
 
 async function stampaPdfOrdForn() {
   const id = _ordFornitoreId;
-  alert('ID ordine: ' + id + '\nCache righe: ' + (_ordFornitoreCache?.righe?.length ?? 'null'));
   if (!id) { alert('Nessun ordine aperto'); return; }
-  load(true);
 
-  const {data:of} = await sb.from('ordini_fornitore').select('*').eq('id',id).single();
-  const {data:righe, error:eRighe} = await sb.from('righe_ordine_fornitore').select('*').eq('ordine_fornitore_id',id);
-  alert('Righe DB: ' + (righe?.length ?? 'null') + '\nErrore: ' + (eRighe?.message || 'nessuno'));
+  // Usa la cache già arricchita da aprireOrdForn
+  const of = _ordFornitoreCache?.of;
+  let righeArricchite = _ordFornitoreCache?.righe || [];
 
-  // Recupera autore/editore/prezzo/cliente da righe_ordine
-  const rigaIds = (righe||[]).map(r=>r.riga_ordine_id).filter(Boolean);
-  let roMap = {};
-  if (rigaIds.length) {
-    const {data:ros} = await sb.from('righe_ordine')
-      .select('id,autore,editore,prezzo,ordini(clienti(nome,cognome))')
-      .in('id', rigaIds);
-    (ros||[]).forEach(ro => { roMap[ro.id] = ro; });
+  // Se la cache è vuota (caso improbabile) ricarica
+  if (!righeArricchite.length) {
+    load(true);
+    const {data:righe} = await sb.from('righe_ordine_fornitore').select('*').eq('ordine_fornitore_id',id);
+    // Recupera dati da righe_ordine con query separate
+    const rigaIds = (righe||[]).map(r=>r.riga_ordine_id).filter(Boolean);
+    let roMap = {};
+    if (rigaIds.length) {
+      const {data:ros} = await sb.from('righe_ordine').select('id,autore,editore,prezzo,ordine_id').in('id', rigaIds);
+      const ordineIds = [...new Set((ros||[]).map(r=>r.ordine_id).filter(Boolean))];
+      let clientiOrdMap = {};
+      if (ordineIds.length) {
+        const {data:ords} = await sb.from('ordini').select('id,clienti(nome,cognome)').in('id', ordineIds);
+        (ords||[]).forEach(o => { clientiOrdMap[o.id] = o.clienti; });
+      }
+      (ros||[]).forEach(ro => { roMap[ro.id] = {...ro, _cliente: clientiOrdMap[ro.ordine_id]||null}; });
+    }
+    righeArricchite = (righe||[]).map(r => {
+      const ro = roMap[r.riga_ordine_id]||{};
+      return { ...r, autore: ro.autore||'', editore: ro.editore||'', prezzo: ro.prezzo||0, _cliente: ro._cliente||null };
+    });
+    load(false);
   }
-  const righeArricchite = (righe||[]).map(r => {
-    const ro = roMap[r.riga_ordine_id]||null;
-    return { ...r, autore: ro?.autore||'', editore: ro?.editore||'', prezzo: ro?.prezzo||0, _cliente: ro?.ordini?.clienti||null };
-  });
-  load(false);
 
   // Raggruppa per ISBN: somma quantità e raccoglie clienti
   const gruppi = {};
@@ -1598,7 +1605,7 @@ async function stampaPdfOrdForn() {
     const key = r.isbn || r.titolo;
     if (!gruppi[key]) gruppi[key] = { isbn: r.isbn||'', titolo: r.titolo, autore: r.autore||'', editore: r.editore||'', prezzo: r.prezzo||0, totale: 0, clienti: [] };
     gruppi[key].totale += r.quantita;
-    const nomeCliente = nomeC(r._cliente) || '—';
+    const nomeCliente = nomeC(r._cliente || r.righe_ordine?.ordini?.clienti) || '—';
     gruppi[key].clienti.push({ nome: nomeCliente, qty: r.quantita });
   });
 
