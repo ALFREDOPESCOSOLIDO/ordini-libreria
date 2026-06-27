@@ -835,7 +835,7 @@ async function onClienteSelezionato() {
       .select('*')
       .contains('classi', [classe])
       .eq('tipo_scuola', 'medie')
-      .eq('da_acquistare', true)
+      .neq('da_acquistare', false)
       .order('sort_order', { ascending: true, nullsFirst: false });
     load(false);
     if (!(data||[]).length) { box.style.display = 'none'; return; }
