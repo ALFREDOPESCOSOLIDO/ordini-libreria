@@ -830,7 +830,7 @@ async function onClienteSelezionato() {
       .select('*')
       .contains('classi', [classe])
       .eq('tipo_scuola', 'medie')
-      .order('materia');
+      .order('sort_order', { ascending: true, nullsFirst: false });
     load(false);
     if (!(data||[]).length) { box.style.display = 'none'; return; }
     document.getElementById('libri-classe-list').innerHTML = (data||[]).map(b => `
@@ -1159,7 +1159,7 @@ async function loadCatalogo() {
   const scuola = document.getElementById('f-cat-scuola')?.value||'';
   const classe = document.getElementById('f-cat-classe')?.value||'';
 
-  let query = sb.from('catalogo_libri').select('*').order('materia').order('titolo');
+  let query = sb.from('catalogo_libri').select('*').order('sort_order', { ascending: true, nullsFirst: false }).order('materia');
   if (q)      query = query.or(`isbn.ilike.%${q}%,titolo.ilike.%${q}%`);
   if (scuola) query = query.eq('tipo_scuola', scuola);
   if (classe) query = query.contains('classi', [classe]);
