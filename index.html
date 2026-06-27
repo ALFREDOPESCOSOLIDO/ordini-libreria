@@ -1568,6 +1568,7 @@ function renderDetOrdForn() {
 }
 
 async function stampaPdfOrdForn() {
+  try {
   const id = _ordFornitoreId;
   if (!id) { alert('Nessun ordine aperto'); return; }
   load(true);
@@ -1669,6 +1670,7 @@ async function stampaPdfOrdForn() {
   const w = window.open('', '_blank');
   w.document.write(html);
   w.document.close();
+  } catch(e) { load(false); alert('Errore stampa: ' + e.message); }
 }
 
 function mostraFormArrivo() {
