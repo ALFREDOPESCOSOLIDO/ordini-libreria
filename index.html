@@ -1611,7 +1611,7 @@ async function stampaPdfOrdForn() {
 
   // Raggruppa per ISBN: somma quantità e raccoglie clienti
   const gruppi = {};
-  righe.forEach(r => {
+  righeArricchite.forEach(r => {
     const key = r.isbn || r.titolo;
     if (!gruppi[key]) gruppi[key] = { isbn: r.isbn||'', titolo: r.titolo, autore: r.autore||'', editore: r.editore||'', prezzo: r.prezzo||0, totale: 0, clienti: [] };
     gruppi[key].totale += r.quantita;
