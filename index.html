@@ -1703,34 +1703,41 @@ async function caricaPdfAdozioni(file) {
       });
     }
 
-    // Raggruppa per righe (y ±8px)
+    // Raggruppa per righe: ordina per Y e crea nuova riga quando il salto > 5pt
     items.sort((a, b) => a.y - b.y || a.x - b.x);
     const rows = [];
     for (const it of items) {
-      const r = rows.find(r => Math.abs(r.y - it.y) <= 8);
-      if (r) { r.items.push(it); r.y = Math.round((r.y * r.items.length + it.y) / (r.items.length + 1)); }
-      else rows.push({ y: it.y, items: [it] });
-    }
-    rows.sort((a, b) => a.y - b.y);
-    rows.forEach(r => r.items.sort((a, b) => a.x - b.x));
-
-    // ── Metadati ───────────────────────────────────────────
-    let classe = '', corso = '', anno = '2026/2027', scuola = '';
-    for (const row of rows.slice(0, 25)) {
-      const line = row.items.map(i => i.str).join(' ');
-      if (!classe && /Classe:/i.test(line))
-        classe = (line.match(/Classe:\s*(\S+(?:\s+\S+)?)/i)||[])[1]||'';
-      if (!corso && /Corso:/i.test(line))
-        corso = line.replace(/.*Corso:\s*/i,'').trim();
-      if (/Anno Scolastico/i.test(line)) {
-        const m = line.match(/(\d{4}\/\d{4})/);
-        if (m) anno = m[1];
+      const last = rows[rows.length - 1];
+      if (last && it.y - last.y <= 5) {
+        last.items.push(it);
+      } else {
+        rows.push({ y: it.y, items: [it] });
       }
     }
-    // Scuola: prima riga con testo significativo (non etichette)
-    scuola = rows.find(r => r.items.length >= 1 &&
-      !/^(FRPM|FRMM|Tipo|Classe|Corso|Anno|ELENCO)/i.test(r.items[0].str))
-      ?.items[0]?.str || '';
+    rows.forEach(r => r.items.sort((a, b) => a.x - b.x));
+
+    // ── Metadati (cerca riga per riga) ────────────────────
+    let classe = '', corso = '', anno = '2026/2027', scuola = '';
+    for (const row of rows.slice(0, 35)) {
+      const line = row.items.map(i => i.str).join(' ');
+      if (!classe && /Classe:/i.test(line)) {
+        const m = line.match(/Classe:\s*(\d+\s*\S+)/i) || line.match(/Classe:\s*(\S+)/i);
+        if (m) classe = m[1];
+      }
+      if (!corso && /Corso:/i.test(line)) {
+        corso = line.replace(/^.*Corso:\s*/i, '').trim();
+      }
+      if (/Anno Scolastico/i.test(line)) {
+        const m = line.match(/(\d{4}[-\/]\d{4})/);
+        if (m) anno = m[1].replace('-', '/');
+      }
+    }
+    // Scuola: prima riga significativa (tipicamente nome istituto in alto a sinistra)
+    scuola = rows.find(r =>
+      r.items[0] && r.items[0].x < 300 &&
+      !/^(FRPM|FRMM|FR[A-Z]|Data|Pag\.|Materia|Tipo|Classe|Corso|Anno|ELENCO|\d)/i.test(r.items[0].str) &&
+      r.items[0].str.length > 3
+    )?.items[0]?.str || '';
 
     _pdfMeta = {
       classe: classe.replace(/\s+/g,'').toUpperCase(),
