@@ -888,17 +888,14 @@ async function onClienteSelezionato() {
     load(true);
     // Cerca sia per chiave completa ("SCUOLA — CLASSE") che per codice breve ("CLASSE")
     const classeBreve = classe.includes(' — ') ? classe.split(' — ').pop().trim() : classe;
-    let { data } = await sb.from('catalogo_libri')
+    let { data, error: err1 } = await sb.from('catalogo_libri')
       .select('*')
       .contains('classi', [classe])
-      .neq('da_acquistare', false)
       .order('sort_order', { ascending: true, nullsFirst: false });
     if (!(data||[]).length && classeBreve !== classe) {
-      // fallback: cerca per codice breve (catalogo importato prima del fix nome scuola)
       ({ data } = await sb.from('catalogo_libri')
         .select('*')
         .contains('classi', [classeBreve])
-        .neq('da_acquistare', false)
         .order('sort_order', { ascending: true, nullsFirst: false }));
     }
     load(false);
