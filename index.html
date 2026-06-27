@@ -771,6 +771,7 @@
 </div>
 
 <script>
+window.onerror = (msg,src,line) => { document.body.innerHTML='<pre style="color:red;padding:2rem">ERRORE JS:\n'+msg+'\nriga '+line+'</pre>'; };
 // ══════════════════════════════════════════════════════
 //  STATO GLOBALE
 // ══════════════════════════════════════════════════════
