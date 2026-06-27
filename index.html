@@ -1569,6 +1569,7 @@ function renderDetOrdForn() {
 
 function stampaPdfOrdForn() {
   const {of, righe} = _ordFornitoreCache;
+  alert('DEBUG righe: ' + righe.length + '\nPrima riga: ' + JSON.stringify({isbn:righe[0]?.isbn, titolo:righe[0]?.titolo, qty:righe[0]?.quantita}));
 
   // Raggruppa per ISBN: somma quantità e raccoglie clienti
   const gruppi = {};
