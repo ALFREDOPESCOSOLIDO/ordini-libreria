@@ -604,6 +604,7 @@
         </div>
         <div class="flex">
           <span id="fd-badge"></span>
+          <button class="btn btn-secondary btn-sm" onclick="stampaPdfOrdForn()">🖨️ Stampa PDF</button>
           <button class="btn btn-secondary" onclick="navTo('ord-forn')">← Fornitore</button>
         </div>
       </div>
@@ -1488,6 +1489,77 @@ function renderDetOrdForn() {
       return `<div style="padding:.5rem 0;border-bottom:1px solid #f0f0f0;font-size:.875rem"><strong>${fmtDate(a.data)}</strong> — ${det||'—'}${a.note?` <span class="text-muted">· ${a.note}</span>`:''}</div>`;
     }).join('');
   } else { document.getElementById('fd-arrivi').innerHTML='<span class="text-muted">Nessun arrivo registrato</span>'; }
+}
+
+function stampaPdfOrdForn() {
+  const {of, righe} = _ordFornitoreCache;
+
+  // Raggruppa per ISBN: somma quantità e raccoglie clienti
+  const gruppi = {};
+  righe.forEach(r => {
+    const key = r.isbn || r.titolo;
+    if (!gruppi[key]) gruppi[key] = { isbn: r.isbn||'', titolo: r.titolo, autore: r.autore||'', editore: r.editore||'', prezzo: r.prezzo||0, totale: 0, clienti: [] };
+    gruppi[key].totale += r.quantita;
+    const nomeCliente = nomeC(r.righe_ordine?.ordini?.clienti) || '—';
+    gruppi[key].clienti.push({ nome: nomeCliente, qty: r.quantita });
+  });
+
+  const righeHtml = Object.values(gruppi).map((g, i) => `
+    <tr style="background:${i%2===0?'#f9fafb':'#fff'}">
+      <td style="padding:6px 8px;font-size:11px;color:#555;font-family:monospace;white-space:nowrap">${g.isbn}</td>
+      <td style="padding:6px 8px">
+        <strong style="font-size:13px">${g.titolo}</strong>
+        <span style="font-size:11px;color:#666;display:block">${g.autore}${g.editore?' · '+g.editore:''}</span>
+        <div style="margin-top:4px;padding-left:8px;border-left:3px solid #d1d5db">
+          ${g.clienti.map(c=>`<span style="font-size:11px;color:#374151;display:block">▸ ${c.nome} &nbsp;×${c.qty}</span>`).join('')}
+        </div>
+      </td>
+      <td style="padding:6px 8px;text-align:center;font-weight:700;font-size:15px;color:#1a202c">${g.totale}</td>
+      <td style="padding:6px 8px;text-align:right;font-size:12px;color:#374151">${g.prezzo?'€ '+fmt(g.prezzo):'—'}</td>
+      <td style="padding:6px 8px;text-align:right;font-size:12px;font-weight:600">€ ${fmt(g.totale*(g.prezzo||0))}</td>
+    </tr>`).join('');
+
+  const totQty   = Object.values(gruppi).reduce((s,g)=>s+g.totale,0);
+  const totImporto = Object.values(gruppi).reduce((s,g)=>s+g.totale*(g.prezzo||0),0);
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>Ordine fornitore ${fmtDate(of.data_ordine)}</title>
+  <style>
+    body{font-family:Arial,sans-serif;margin:0;padding:24px;color:#1a202c}
+    h1{font-size:18px;margin:0 0 4px}
+    .sub{font-size:13px;color:#555;margin-bottom:16px}
+    table{width:100%;border-collapse:collapse}
+    thead tr{background:#1a202c;color:#fff}
+    thead th{padding:8px;font-size:12px;text-align:left}
+    thead th:nth-child(3),thead th:nth-child(4),thead th:nth-child(5){text-align:right}
+    tfoot tr{background:#edf2f7;font-weight:700}
+    tfoot td{padding:8px;font-size:13px}
+    @media print{body{padding:12px}}
+  </style></head><body>
+  <h1>Ordine Fornitore — ${of.fornitore||'—'}</h1>
+  <div class="sub">Data: ${fmtDate(of.data_ordine)} &nbsp;·&nbsp; ${Object.keys(gruppi).length} titoli &nbsp;·&nbsp; ${totQty} copie</div>
+  <table>
+    <thead><tr>
+      <th style="width:110px">ISBN</th>
+      <th>Titolo / Clienti</th>
+      <th style="width:50px;text-align:center">Qt.</th>
+      <th style="width:70px;text-align:right">Prezzo</th>
+      <th style="width:80px;text-align:right">Totale</th>
+    </tr></thead>
+    <tbody>${righeHtml}</tbody>
+    <tfoot><tr>
+      <td colspan="2" style="text-align:right;padding:8px">TOTALE ORDINE</td>
+      <td style="text-align:center;padding:8px">${totQty}</td>
+      <td></td>
+      <td style="text-align:right;padding:8px">€ ${fmt(totImporto)}</td>
+    </tr></tfoot>
+  </table>
+  <script>window.onload=()=>window.print()<\/script>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
 }
 
 function mostraFormArrivo() {
