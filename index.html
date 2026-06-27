@@ -689,11 +689,14 @@
               <option value="superiori">Scuola Superiore</option>
             </select></div>
           <div class="form-group" id="cf-classe-wrap" style="display:none"><label>Classe</label>
-            <select id="cf-classe">
+            <select id="cf-classe" style="display:none">
               <option value="">—</option>
               <option>1A</option><option>1B</option><option>1C</option>
               <option>2A</option><option>2B</option><option>2C</option>
               <option>3A</option>
+            </select>
+            <select id="cf-classe-sup" style="display:none">
+              <option value="">— seleziona classe —</option>
             </select></div>
           <div class="form-group" id="cf-scuola-wrap" style="display:none"><label>Scuola</label>
             <input type="text" id="cf-scuola" placeholder="Nome scuola"></div>
@@ -1564,10 +1567,38 @@ async function loadClienti() {
   }).join('');
 }
 
-function toggleCampiScuola() {
+async function toggleCampiScuola() {
   const tipo = document.getElementById('cf-tipo').value;
-  document.getElementById('cf-classe-wrap').style.display = tipo==='medie'?'block':'none';
+  const classeWrap = document.getElementById('cf-classe-wrap');
+  const classeSelect = document.getElementById('cf-classe');
+  const classeSup   = document.getElementById('cf-classe-sup');
+
+  classeWrap.style.display = (tipo==='medie'||tipo==='superiori') ? 'block' : 'none';
   document.getElementById('cf-scuola-wrap').style.display = (tipo==='medie'||tipo==='superiori')?'block':'none';
+
+  if (tipo === 'medie') {
+    classeSelect.style.display = 'block';
+    classeSup.style.display    = 'none';
+  } else if (tipo === 'superiori') {
+    classeSelect.style.display = 'none';
+    classeSup.style.display    = 'block';
+    // Popola con classi uniche dal catalogo superiori
+    if (classeSup.options.length <= 1) {
+      const { data } = await sb.from('catalogo_libri')
+        .select('classi').eq('tipo_scuola','superiori');
+      const classiSet = new Set();
+      (data||[]).forEach(r => (r.classi||[]).forEach(c => classiSet.add(c)));
+      const sorted = [...classiSet].sort();
+      sorted.forEach(c => {
+        const o = document.createElement('option');
+        o.value = o.textContent = c;
+        classeSup.appendChild(o);
+      });
+    }
+  } else {
+    classeSelect.style.display = 'none';
+    classeSup.style.display    = 'none';
+  }
 }
 
 async function apriFormCliente(id) {
@@ -1575,7 +1606,8 @@ async function apriFormCliente(id) {
   ['cf-id','cf-nome','cf-cognome','cf-tel','cf-email','cf-note','cf-scuola'].forEach(f=>document.getElementById(f).value='');
   document.getElementById('cf-tipo').value='privato';
   document.getElementById('cf-classe').value='';
-  toggleCampiScuola();
+  document.getElementById('cf-classe-sup').value='';
+  await toggleCampiScuola();
   document.getElementById('cf-title').textContent = id?'Modifica cliente':'Nuovo cliente';
   if (id) {
     const { data: c } = await sb.from('clienti').select('*').eq('id',id).single();
@@ -1586,9 +1618,13 @@ async function apriFormCliente(id) {
     document.getElementById('cf-email').value   = c.email||'';
     document.getElementById('cf-note').value    = c.note||'';
     document.getElementById('cf-tipo').value    = c.tipo_cliente||'privato';
-    document.getElementById('cf-classe').value  = c.classe||'';
     document.getElementById('cf-scuola').value  = c.scuola||'';
-    toggleCampiScuola();
+    await toggleCampiScuola();
+    if (c.tipo_cliente === 'superiori') {
+      document.getElementById('cf-classe-sup').value = c.classe||'';
+    } else {
+      document.getElementById('cf-classe').value = c.classe||'';
+    }
   }
   hideEl('cf-err');
   activatePage('cliente-form','clienti');
@@ -1606,7 +1642,7 @@ async function salvaCliente() {
     email:document.getElementById('cf-email').value.trim()||null,
     note:document.getElementById('cf-note').value.trim()||null,
     tipo_cliente:tipo,
-    classe:tipo==='medie'?document.getElementById('cf-classe').value||null:null,
+    classe:tipo==='medie'?document.getElementById('cf-classe').value||null:tipo==='superiori'?document.getElementById('cf-classe-sup').value||null:null,
     scuola:(tipo==='medie'||tipo==='superiori')?document.getElementById('cf-scuola').value.trim()||null:null,
   };
   load(true);
