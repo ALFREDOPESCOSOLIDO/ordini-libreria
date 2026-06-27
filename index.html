@@ -1453,14 +1453,21 @@ async function salvaOrdForn() {
 async function aprireOrdForn(id) {
   _ordFornitoreId=id; load(true);
   try {
-    const [{data:of,error:e1},{data:righe,error:e2},{data:arrivi,error:e3}]=await Promise.all([
+    const [{data:of},{data:righe},{data:arrivi}]=await Promise.all([
       sb.from('ordini_fornitore').select('*').eq('id',id).single(),
-      sb.from('righe_ordine_fornitore').select('*,righe_ordine(ordine_id,ordini(clienti(nome,cognome)))').eq('ordine_fornitore_id',id).order('created_at'),
+      sb.from('righe_ordine_fornitore').select('*').eq('ordine_fornitore_id',id).order('created_at'),
       sb.from('arrivi_fornitore').select('*,righe_arrivo(quantita,riga_ordine_fornitore_id)').eq('ordine_fornitore_id',id).order('data'),
     ]);
-    if (e1||e2||e3) throw new Error((e1||e2||e3).message);
+
+    // Recupera nomi clienti tramite riga_ordine_id
+    const righeConCliente = await Promise.all((righe||[]).map(async r => {
+      if (!r.riga_ordine_id) return r;
+      const {data:ro} = await sb.from('righe_ordine').select('ordini(clienti(nome,cognome))').eq('id',r.riga_ordine_id).single();
+      return {...r, righe_ordine: ro};
+    }));
+
     load(false);
-    _ordFornitoreCache={of,righe:righe||[],arrivi:arrivi||[]};
+    _ordFornitoreCache={of, righe:righeConCliente, arrivi:arrivi||[]};
     renderDetOrdForn();
     activatePage('ord-forn-det','ord-forn');
   } catch(e) {
