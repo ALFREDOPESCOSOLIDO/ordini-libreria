@@ -1569,11 +1569,13 @@ function renderDetOrdForn() {
 
 async function stampaPdfOrdForn() {
   const id = _ordFornitoreId;
+  alert('ID ordine: ' + id + '\nCache righe: ' + (_ordFornitoreCache?.righe?.length ?? 'null'));
   if (!id) { alert('Nessun ordine aperto'); return; }
   load(true);
 
   const {data:of} = await sb.from('ordini_fornitore').select('*').eq('id',id).single();
-  const {data:righe} = await sb.from('righe_ordine_fornitore').select('*').eq('ordine_fornitore_id',id);
+  const {data:righe, error:eRighe} = await sb.from('righe_ordine_fornitore').select('*').eq('ordine_fornitore_id',id);
+  alert('Righe DB: ' + (righe?.length ?? 'null') + '\nErrore: ' + (eRighe?.message || 'nessuno'));
 
   // Recupera autore/editore/prezzo/cliente da righe_ordine
   const rigaIds = (righe||[]).map(r=>r.riga_ordine_id).filter(Boolean);
