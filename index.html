@@ -837,8 +837,9 @@ async function onClienteSelezionato() {
       <div style="display:flex;align-items:center;gap:.75rem;padding:.45rem 0;border-bottom:1px solid #c6f6d5;font-size:.875rem">
         <input type="checkbox" id="lc-${b.id}" data-libro='${JSON.stringify(b).replace(/'/g,"&#39;")}' checked style="width:auto;flex-shrink:0">
         <label for="lc-${b.id}" style="flex:1;cursor:pointer">
-          <strong>${b.materia}</strong> — ${b.titolo}
-          <span class="text-muted" style="font-size:.78rem"> · ${b.autore||''} · ${b.editore||''}</span>
+          <span style="font-size:.72rem;color:#718096;font-family:monospace">${b.isbn||'—'}</span>
+          <strong style="display:block">${b.materia} — ${b.titolo}</strong>
+          <span class="text-muted" style="font-size:.78rem">${b.autore||''} · ${b.editore||''}</span>
         </label>
         <span style="font-weight:700;color:#276749;white-space:nowrap">€ ${fmt(b.prezzo)}</span>
       </div>`).join('');
