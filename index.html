@@ -190,6 +190,7 @@
     <a id="nav-catalogo"  onclick="navTo('catalogo')">📖 Catalogo libri</a>
     <a id="nav-importa-pdf" onclick="navTo('importa-pdf')">📥 Importa PDF adozioni</a>
     <div class="sidebar-section">Fornitori</div>
+    <a id="nav-fornitori" onclick="navTo('fornitori')">🏢 Fornitori</a>
     <a id="nav-ord-forn"  onclick="navTo('ord-forn')">🏭 Ordini fornitore</a>
     <a id="nav-carico-merce" onclick="navTo('carico-merce')">📦 Carico merce</a>
     <div class="sidebar-spacer"></div>
@@ -554,6 +555,44 @@
       </div>
     </div>
 
+    <!-- FORNITORI -->
+    <div id="page-fornitori" class="page">
+      <div class="header-bar">
+        <div class="page-title" style="margin-bottom:0">Fornitori</div>
+        <button class="btn btn-purple" onclick="apriFormFornitore(null)">+ Nuovo fornitore</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Nome</th><th>Email</th><th>Telefono</th><th>Editori associati</th><th></th></tr></thead>
+          <tbody id="forn-tb"><tr><td colspan="5" class="text-muted" style="padding:1rem">Caricamento…</td></tr></tbody>
+        </table>
+      </div>
+      <!-- form aggiunta/modifica -->
+      <div id="forn-form-panel" class="section-card" style="display:none;margin-top:1rem">
+        <h3 id="forn-form-title">Nuovo fornitore</h3>
+        <input type="hidden" id="ff-id">
+        <div class="grid-2">
+          <div class="form-group"><label>Nome *</label><input type="text" id="ff-nome"></div>
+          <div class="form-group"><label>Email</label><input type="email" id="ff-email"></div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group"><label>Telefono</label><input type="text" id="ff-tel"></div>
+          <div class="form-group"><label>Note</label><input type="text" id="ff-note"></div>
+        </div>
+        <div class="form-group">
+          <label>Editori associati <span class="text-muted text-sm">(seleziona le case editrici che questo fornitore distribuisce)</span></label>
+          <div id="ff-editori" style="display:flex;flex-wrap:wrap;gap:.5rem .75rem;margin-top:.4rem;padding:.75rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;min-height:2.5rem">
+            <span class="text-muted text-sm">Nessun editore nel catalogo</span>
+          </div>
+        </div>
+        <div id="ff-err" class="alert alert-error" style="display:none"></div>
+        <div class="flex flex-end mt-2" style="gap:.5rem">
+          <button class="btn btn-secondary" onclick="hideEl('forn-form-panel')">Annulla</button>
+          <button class="btn btn-purple" onclick="salvaFornitore()">💾 Salva</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ORDINI FORNITORE — LISTA -->
     <div id="page-ord-forn" class="page">
       <div class="header-bar">
@@ -576,24 +615,18 @@
     <div id="page-ord-forn-nuovo" class="page">
       <div class="header-bar">
         <div class="page-title" style="margin-bottom:0">Nuovo ordine fornitore</div>
-        <button class="btn btn-secondary" onclick="navTo('ord-forn')">← Fornitore</button>
+        <button class="btn btn-secondary" onclick="navTo('ord-forn')">← Annulla</button>
       </div>
       <div class="section-card">
-        <div class="grid-2">
-          <div class="form-group"><label>Fornitore</label><input type="text" id="nf-fornitore"></div>
-          <div class="form-group"><label>Data ordine</label><input type="date" id="nf-data"></div>
-        </div>
-        <div class="form-group"><label>Note</label><input type="text" id="nf-note"></div>
+        <div class="form-group"><label>Data ordine</label><input type="date" id="nf-data" style="max-width:200px"></div>
       </div>
-      <div class="section-card">
-        <h3>Libri da ordinare</h3>
-        <p class="text-muted text-sm" style="margin-bottom:.75rem">Seleziona i libri degli ordini clienti non ancora ordinati al fornitore.</p>
-        <div id="nf-pending"><span class="text-muted">Caricamento…</span></div>
+      <div id="nf-gruppi">
+        <div class="text-muted" style="padding:1rem">Caricamento…</div>
       </div>
       <div id="nf-err" class="alert alert-error" style="display:none"></div>
       <div class="flex flex-end mt-2">
         <button class="btn btn-secondary" onclick="navTo('ord-forn')">Annulla</button>
-        <button class="btn btn-purple" onclick="salvaOrdForn()">💾 Crea ordine fornitore</button>
+        <button class="btn btn-purple" onclick="salvaOrdForn()">💾 Crea ordini fornitore</button>
       </div>
     </div>
 
@@ -829,7 +862,7 @@ function navTo(name) {
   if (pg)  pg.classList.add('active');
   if (nav) nav.classList.add('active');
   if (name === 'importa-pdf') resetImportaPdf();
-  const loaders = { dashboard: loadDashboard, ordini: loadOrdini, clienti: loadClienti, 'ord-forn': loadOrdForn, catalogo: loadCatalogo };
+  const loaders = { dashboard: loadDashboard, ordini: loadOrdini, clienti: loadClienti, 'ord-forn': loadOrdForn, catalogo: loadCatalogo, fornitori: loadFornitori };
   if (loaders[name]) loaders[name]();
 }
 
@@ -1413,6 +1446,110 @@ async function salvaLibroCatalogo() {
 }
 
 // ══════════════════════════════════════════════════════
+//  FORNITORI
+// ══════════════════════════════════════════════════════
+async function loadFornitori() {
+  const [{data:forn},{data:fe},{data:ed}] = await Promise.all([
+    sb.from('fornitori').select('*').order('nome'),
+    sb.from('fornitori_editori').select('fornitore_id,editore_id'),
+    sb.from('editori').select('id,nome').order('nome'),
+  ]);
+  const edMap = {}; (ed||[]).forEach(e => { edMap[e.id]=e.nome; });
+  const feByForn = {};
+  (fe||[]).forEach(r => {
+    if (!feByForn[r.fornitore_id]) feByForn[r.fornitore_id]=[];
+    feByForn[r.fornitore_id].push(edMap[r.editore_id]||'');
+  });
+  if (!(forn||[]).length) {
+    document.getElementById('forn-tb').innerHTML='<tr><td colspan="5" class="text-muted" style="padding:1.5rem;text-align:center">Nessun fornitore — clicca "+ Nuovo fornitore" per aggiungerne uno</td></tr>';
+    return;
+  }
+  document.getElementById('forn-tb').innerHTML=(forn||[]).map(f=>`
+    <tr>
+      <td><strong>${f.nome}</strong></td>
+      <td>${f.email||'—'}</td>
+      <td>${f.telefono||'—'}</td>
+      <td><span class="text-sm">${(feByForn[f.id]||[]).join(', ')||'<span class="text-muted">nessuno</span>'}</span></td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-secondary btn-sm" onclick="apriFormFornitore('${f.id}')">✏️ Modifica</button>
+        <button class="btn btn-secondary btn-sm" style="color:#e53e3e" onclick="eliminaFornitore('${f.id}','${f.nome.replace(/'/g,"\\'")}')">🗑</button>
+      </td>
+    </tr>`).join('');
+}
+
+async function apriFormFornitore(id) {
+  hideEl('ff-err');
+  document.getElementById('forn-form-title').textContent = id ? 'Modifica fornitore' : 'Nuovo fornitore';
+  document.getElementById('ff-id').value = id||'';
+  document.getElementById('ff-nome').value=''; document.getElementById('ff-email').value='';
+  document.getElementById('ff-tel').value=''; document.getElementById('ff-note').value='';
+
+  const [{data:ed},{data:fe}] = await Promise.all([
+    sb.from('editori').select('id,nome').order('nome'),
+    id ? sb.from('fornitori_editori').select('editore_id').eq('fornitore_id',id) : Promise.resolve({data:[]}),
+  ]);
+  const associati = new Set((fe||[]).map(r=>r.editore_id));
+
+  if (id) {
+    const {data:f} = await sb.from('fornitori').select('*').eq('id',id).single();
+    if (f) {
+      document.getElementById('ff-nome').value=f.nome||'';
+      document.getElementById('ff-email').value=f.email||'';
+      document.getElementById('ff-tel').value=f.telefono||'';
+      document.getElementById('ff-note').value=f.note||'';
+    }
+  }
+
+  const edDiv = document.getElementById('ff-editori');
+  if (!(ed||[]).length) {
+    edDiv.innerHTML='<span class="text-muted text-sm">Nessun editore nel catalogo — importa prima un PDF adozioni</span>';
+  } else {
+    edDiv.innerHTML=(ed||[]).map(e=>`
+      <label style="display:flex;align-items:center;gap:.3rem;cursor:pointer;font-size:.875rem">
+        <input type="checkbox" value="${e.id}" ${associati.has(e.id)?'checked':''} style="width:auto">
+        ${e.nome}
+      </label>`).join('');
+  }
+  document.getElementById('forn-form-panel').style.display='block';
+  document.getElementById('forn-form-panel').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+async function salvaFornitore() {
+  const id   = document.getElementById('ff-id').value||null;
+  const nome = document.getElementById('ff-nome').value.trim();
+  if (!nome) { showErr('ff-err','Il nome è obbligatorio'); return; }
+  load(true);
+  const payload = { nome, email: document.getElementById('ff-email').value.trim()||null,
+    telefono: document.getElementById('ff-tel').value.trim()||null,
+    note: document.getElementById('ff-note').value.trim()||null };
+  let fornId = id;
+  if (id) {
+    await sb.from('fornitori').update(payload).eq('id',id);
+  } else {
+    const {data:f} = await sb.from('fornitori').insert(payload).select().single();
+    fornId = f.id;
+  }
+  // Aggiorna editori associati
+  const checked = [...document.querySelectorAll('#ff-editori input[type=checkbox]:checked')].map(c=>c.value);
+  await sb.from('fornitori_editori').delete().eq('fornitore_id',fornId);
+  if (checked.length) {
+    await sb.from('fornitori_editori').insert(checked.map(eid=>({fornitore_id:fornId,editore_id:eid})));
+  }
+  load(false);
+  hideEl('forn-form-panel');
+  loadFornitori();
+}
+
+async function eliminaFornitore(id, nome) {
+  if (!confirm(`Elimina fornitore "${nome}"?`)) return;
+  load(true);
+  await sb.from('fornitori_editori').delete().eq('fornitore_id',id);
+  await sb.from('fornitori').delete().eq('id',id);
+  load(false);
+  loadFornitori();
+}
+
+// ══════════════════════════════════════════════════════
 //  ORDINI FORNITORE
 // ══════════════════════════════════════════════════════
 async function loadOrdForn() {
@@ -1454,51 +1591,132 @@ async function loadOrdForn() {
 }
 
 async function apriNuovoOrdForn() {
-  document.getElementById('nf-data').value=today(); document.getElementById('nf-fornitore').value=''; document.getElementById('nf-note').value='';
+  document.getElementById('nf-data').value=today();
   hideEl('nf-err');
-  const { data: righe }=await sb.from('righe_ordine').select('id,isbn,titolo,quantita,quantita_ordinata_fornitore,ordini(id,data_ordine,clienti(nome,cognome))');
+  document.getElementById('nf-gruppi').innerHTML='<div class="text-muted" style="padding:1rem">Caricamento…</div>';
+  activatePage('ord-forn-nuovo','ord-forn');
+
+  // Carica libri da ordinare, fornitori, editori e associazioni
+  const [{data:righe},{data:forn},{data:ed},{data:fe}] = await Promise.all([
+    sb.from('righe_ordine').select('id,isbn,titolo,editore,quantita,quantita_ordinata_fornitore,ordini(id,data_ordine,clienti(nome,cognome))'),
+    sb.from('fornitori').select('id,nome').order('nome'),
+    sb.from('editori').select('id,nome'),
+    sb.from('fornitori_editori').select('fornitore_id,editore_id'),
+  ]);
+
   const da=(righe||[]).filter(r=>r.quantita>(r.quantita_ordinata_fornitore||0));
   if (!da.length) {
-    document.getElementById('nf-pending').innerHTML='<div class="alert alert-success">✓ Tutti i libri sono già stati ordinati al fornitore.</div>';
-  } else {
-    document.getElementById('nf-pending').innerHTML=`
-      <div style="display:grid;grid-template-columns:24px 130px 1fr 100px 80px 100px;gap:.5rem;align-items:center;padding:.3rem 0;border-bottom:2px solid #e2e8f0;margin-bottom:.5rem">
-        <span></span><span class="text-sm" style="font-weight:700;color:#718096;text-transform:uppercase">ISBN</span>
-        <span class="text-sm" style="font-weight:700;color:#718096;text-transform:uppercase">Titolo — Cliente</span>
-        <span class="text-sm" style="font-weight:700;color:#718096;text-transform:uppercase">Data ord.</span>
-        <span class="text-sm" style="font-weight:700;color:#718096;text-transform:uppercase">Qty</span>
-        <span class="text-sm" style="font-weight:700;color:#718096;text-transform:uppercase">Da ord.</span>
-      </div>
-      ${da.map(r=>{const max=r.quantita-(r.quantita_ordinata_fornitore||0);return `
-        <div style="display:grid;grid-template-columns:24px 130px 1fr 100px 80px 100px;gap:.5rem;align-items:center;padding:.4rem 0;border-bottom:1px solid #f0f0f0;font-size:.875rem">
-          <input type="checkbox" data-riga="${r.id}" data-isbn="${r.isbn||''}" data-titolo="${r.titolo}" checked style="width:auto">
-          <span style="font-size:.78rem;color:#718096">${r.isbn||'—'}</span>
-          <div><strong>${r.titolo}</strong><br><span class="text-muted text-sm">${nomeC(r.ordini?.clienti)}</span></div>
-          <span class="text-muted text-sm">${fmtDate(r.ordini?.data_ordine)}</span>
-          <span>${r.quantita}</span>
-          <input type="number" class="nf-qty" data-max="${max}" value="${max}" min="1" max="${max}" style="width:70px">
-        </div>`;}).join('')}`;
+    document.getElementById('nf-gruppi').innerHTML='<div class="alert alert-success" style="margin:0">✓ Tutti i libri sono già stati ordinati al fornitore.</div>';
+    return;
   }
-  activatePage('ord-forn-nuovo','ord-forn');
+
+  // Mappa editore_id → fornitore_id
+  const edNomeToId = {}; (ed||[]).forEach(e=>{ edNomeToId[e.nome.trim().toLowerCase()]=e.id; });
+  const edIdToForn = {}; (fe||[]).forEach(r=>{ edIdToForn[r.editore_id]=r.fornitore_id; });
+  const fornMap = {}; (forn||[]).forEach(f=>{ fornMap[f.id]=f; });
+
+  // Raggruppa libri per fornitore (null = senza fornitore)
+  const gruppi = {}; // fornitore_id|'__none__' → {fornitore, righe:[]}
+  da.forEach(r => {
+    const edNome = (r.editore||'').trim().toLowerCase();
+    const edId   = edNomeToId[edNome];
+    const fornId = edId ? edIdToForn[edId] : null;
+    const key    = fornId || '__none__';
+    if (!gruppi[key]) gruppi[key] = { fornitore: fornMap[fornId]||null, righe:[] };
+    gruppi[key].righe.push(r);
+  });
+
+  const colH = `display:grid;grid-template-columns:24px 120px 1fr 100px 70px 80px;gap:.5rem;align-items:center`;
+  const hdrS = `font-weight:700;color:#718096;text-transform:uppercase;font-size:.78rem`;
+
+  const renderGruppo = (key, g) => {
+    const isForn = key !== '__none__';
+    const titolo = isForn ? g.fornitore.nome : 'Senza fornitore associato';
+    const colore = isForn ? '#553c9a' : '#718096';
+    const righeHtml = g.righe.map(r => {
+      const max = r.quantita-(r.quantita_ordinata_fornitore||0);
+      return `<div style="${colH};padding:.4rem 0;border-bottom:1px solid #f0f0f0;font-size:.875rem">
+        <input type="checkbox" data-riga="${r.id}" data-isbn="${r.isbn||''}" data-titolo="${escHtml(r.titolo)}" data-forn-id="${isForn?g.fornitore.id:''}" ${isForn?'checked':''} style="width:auto">
+        <span style="font-size:.78rem;color:#718096">${r.isbn||'—'}</span>
+        <div><strong>${r.titolo}</strong><br><span class="text-muted text-sm">${nomeC(r.ordini?.clienti)} · <em>${r.editore||'—'}</em></span></div>
+        <span class="text-muted text-sm">${fmtDate(r.ordini?.data_ordine)}</span>
+        <span>${r.quantita}</span>
+        <input type="number" class="nf-qty" value="${max}" min="1" max="${max}" style="width:65px">
+      </div>`;
+    }).join('');
+    return `<div class="section-card" style="margin-bottom:1rem">
+      <h3 style="color:${colore};margin-bottom:.75rem">🏭 ${titolo} <span class="text-muted text-sm">(${g.righe.length} ${g.righe.length===1?'titolo':'titoli'})</span></h3>
+      <div style="${colH};padding:.3rem 0;border-bottom:2px solid #e2e8f0;margin-bottom:.4rem">
+        <span></span><span style="${hdrS}">ISBN</span><span style="${hdrS}">Titolo — Cliente</span>
+        <span style="${hdrS}">Data ord.</span><span style="${hdrS}">Qty</span><span style="${hdrS}">Da ord.</span>
+      </div>
+      ${righeHtml}
+    </div>`;
+  };
+
+  // Fornitori prima, poi senza fornitore
+  let html = '';
+  Object.entries(gruppi).filter(([k])=>k!=='__none__').forEach(([k,g])=>{ html+=renderGruppo(k,g); });
+  if (gruppi['__none__']) html+=renderGruppo('__none__',gruppi['__none__']);
+  document.getElementById('nf-gruppi').innerHTML=html;
 }
 
 async function salvaOrdForn() {
-  const fornitore=document.getElementById('nf-fornitore').value.trim();
-  const checks=[...document.querySelectorAll('#nf-pending input[type=checkbox][data-riga]')];
-  const sel=checks.filter(c=>c.checked).map(c=>{
+  const dataOrdine = document.getElementById('nf-data').value;
+  const checks = [...document.querySelectorAll('#nf-gruppi input[type=checkbox][data-riga]')];
+  const sel = checks.filter(c=>c.checked).map(c=>{
     const row=c.closest('div'); const qty=row.querySelector('.nf-qty');
-    return {riga_ordine_id:c.dataset.riga,isbn:c.dataset.isbn,titolo:c.dataset.titolo,quantita:parseInt(qty?.value||0)};
+    return { riga_ordine_id:c.dataset.riga, isbn:c.dataset.isbn, titolo:c.dataset.titolo,
+             forn_id:c.dataset.fornId||null, quantita:parseInt(qty?.value||0) };
   }).filter(r=>r.quantita>0);
   if (!sel.length) { showErr('nf-err','Seleziona almeno un libro'); return; }
   load(true);
-  const { data: of }=await sb.from('ordini_fornitore').insert({data_ordine:document.getElementById('nf-data').value,fornitore:fornitore||null,stato:'inviato',note:document.getElementById('nf-note').value.trim()||null}).select().single();
-  await sb.from('righe_ordine_fornitore').insert(sel.map(s=>({...s,ordine_fornitore_id:of.id,quantita_arrivata:0})));
-  for (const s of sel) {
-    const { data: r }=await sb.from('righe_ordine').select('quantita_ordinata_fornitore').eq('id',s.riga_ordine_id).single();
-    await sb.from('righe_ordine').update({quantita_ordinata_fornitore:(r.quantita_ordinata_fornitore||0)+s.quantita}).eq('id',s.riga_ordine_id);
+
+  // Raggruppa per fornitore
+  const perForn = {};
+  sel.forEach(s=>{
+    const key = s.forn_id||'__none__';
+    if (!perForn[key]) perForn[key]=[];
+    perForn[key].push(s);
+  });
+
+  // Recupera nomi fornitori
+  const fornIds = Object.keys(perForn).filter(k=>k!=='__none__');
+  let fornNomi = {};
+  if (fornIds.length) {
+    const {data:fns} = await sb.from('fornitori').select('id,nome').in('id',fornIds);
+    (fns||[]).forEach(f=>{ fornNomi[f.id]=f.nome; });
   }
+
+  const ordiniCreati = [];
+  for (const [key, righe] of Object.entries(perForn)) {
+    const fornId   = key==='__none__' ? null : key;
+    const fornNome = fornId ? (fornNomi[fornId]||null) : null;
+    const {data:of} = await sb.from('ordini_fornitore').insert({
+      data_ordine: dataOrdine, fornitore: fornNome, fornitore_id: fornId, stato:'inviato'
+    }).select().single();
+    await sb.from('righe_ordine_fornitore').insert(
+      righe.map(s=>({riga_ordine_id:s.riga_ordine_id,isbn:s.isbn,titolo:s.titolo,
+                     quantita:s.quantita,quantita_arrivata:0,ordine_fornitore_id:of.id}))
+    );
+    ordiniCreati.push(of.id);
+  }
+
+  // Aggiorna quantita_ordinata_fornitore su righe_ordine
+  const byRiga = {};
+  sel.forEach(s=>{ byRiga[s.riga_ordine_id]=(byRiga[s.riga_ordine_id]||0)+s.quantita; });
+  const rigaIds = Object.keys(byRiga);
+  const {data:ros} = await sb.from('righe_ordine').select('id,quantita_ordinata_fornitore').in('id',rigaIds);
+  for (const ro of (ros||[])) {
+    await sb.from('righe_ordine').update({
+      quantita_ordinata_fornitore:(ro.quantita_ordinata_fornitore||0)+(byRiga[ro.id]||0)
+    }).eq('id',ro.id);
+  }
+
   load(false);
-  await aprireOrdForn(of.id);
+  // Se un solo ordine apri il dettaglio, altrimenti torna alla lista
+  if (ordiniCreati.length===1) { await aprireOrdForn(ordiniCreati[0]); }
+  else { navTo('ord-forn'); }
 }
 
 async function aprireOrdForn(id) {
@@ -1506,7 +1724,7 @@ async function aprireOrdForn(id) {
   try {
     const [{data:of},{data:righe},{data:arrivi}]=await Promise.all([
       sb.from('ordini_fornitore').select('*').eq('id',id).single(),
-      sb.from('righe_ordine_fornitore').select('*').eq('ordine_fornitore_id',id).order('created_at'),
+      sb.from('righe_ordine_fornitore').select('*').eq('ordine_fornitore_id',id),
       sb.from('arrivi_fornitore').select('*,righe_arrivo(quantita,riga_ordine_fornitore_id)').eq('ordine_fornitore_id',id).order('data'),
     ]);
 
@@ -1862,6 +2080,7 @@ function fmt(n)     { return (parseFloat(n)||0).toFixed(2); }
 function today()    { return new Date().toISOString().split('T')[0]; }
 function fmtDate(d) { if(!d) return '—'; const [y,m,g]=d.split('-'); return `${g}/${m}/${y}`; }
 function nomeC(c)   { if(!c) return '—'; return [c.nome,c.cognome].filter(Boolean).join(' '); }
+function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function labelTipo(t){ return {acconto:'Acconto',parziale:'Pagamento parziale',saldo:'Saldo finale'}[t]||t; }
 
 function badgeOrdine(s) {
@@ -2149,10 +2368,16 @@ async function confermaImportaPdf() {
       }
     }
 
+    // Upsert editori dalla lista libri importati
+    const editoriUnici = [...new Set(libri.map(b=>b.editore.trim()).filter(Boolean))];
+    for (const nome of editoriUnici) {
+      await sb.from('editori').upsert({ nome }, { onConflict: 'nome', ignoreDuplicates: true });
+    }
+
     load(false);
     document.getElementById('pdf-preview').style.display = 'none';
     document.getElementById('pdf-success-msg').textContent =
-      `Importati ${libri.length} libri per la classe ${classe} — ${scuola}`;
+      `Importati ${libri.length} libri per la classe ${classeKey}`;
     document.getElementById('pdf-success').style.display = 'block';
   } catch(e) {
     load(false);
