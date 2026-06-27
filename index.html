@@ -2194,7 +2194,7 @@ async function _caricaRigheIsbn(isbn) {
     return;
   }
   const { data: righe } = await sb.from('righe_ordine_fornitore')
-    .select('*').in('ordine_fornitore_id', ofIds).eq('isbn', isbn).order('created_at');
+    .select('*').in('ordine_fornitore_id', ofIds).eq('isbn', isbn);
 
   if (!(righe||[]).length) {
     load(false);
