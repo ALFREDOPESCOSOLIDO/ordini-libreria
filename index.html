@@ -1567,9 +1567,28 @@ function renderDetOrdForn() {
   } else { document.getElementById('fd-arrivi').innerHTML='<span class="text-muted">Nessun arrivo registrato</span>'; }
 }
 
-function stampaPdfOrdForn() {
-  const {of, righe} = _ordFornitoreCache;
-  alert('DEBUG righe: ' + righe.length + '\nPrima riga: ' + JSON.stringify({isbn:righe[0]?.isbn, titolo:righe[0]?.titolo, qty:righe[0]?.quantita}));
+async function stampaPdfOrdForn() {
+  const id = _ordFornitoreId;
+  if (!id) { alert('Nessun ordine aperto'); return; }
+  load(true);
+
+  const {data:of} = await sb.from('ordini_fornitore').select('*').eq('id',id).single();
+  const {data:righe} = await sb.from('righe_ordine_fornitore').select('*').eq('ordine_fornitore_id',id);
+
+  // Recupera autore/editore/prezzo/cliente da righe_ordine
+  const rigaIds = (righe||[]).map(r=>r.riga_ordine_id).filter(Boolean);
+  let roMap = {};
+  if (rigaIds.length) {
+    const {data:ros} = await sb.from('righe_ordine')
+      .select('id,autore,editore,prezzo,ordini(clienti(nome,cognome))')
+      .in('id', rigaIds);
+    (ros||[]).forEach(ro => { roMap[ro.id] = ro; });
+  }
+  const righeArricchite = (righe||[]).map(r => {
+    const ro = roMap[r.riga_ordine_id]||null;
+    return { ...r, autore: ro?.autore||'', editore: ro?.editore||'', prezzo: ro?.prezzo||0, _cliente: ro?.ordini?.clienti||null };
+  });
+  load(false);
 
   // Raggruppa per ISBN: somma quantità e raccoglie clienti
   const gruppi = {};
@@ -1577,7 +1596,7 @@ function stampaPdfOrdForn() {
     const key = r.isbn || r.titolo;
     if (!gruppi[key]) gruppi[key] = { isbn: r.isbn||'', titolo: r.titolo, autore: r.autore||'', editore: r.editore||'', prezzo: r.prezzo||0, totale: 0, clienti: [] };
     gruppi[key].totale += r.quantita;
-    const nomeCliente = nomeC(r.righe_ordine?.ordini?.clienti) || '—';
+    const nomeCliente = nomeC(r._cliente) || '—';
     gruppi[key].clienti.push({ nome: nomeCliente, qty: r.quantita });
   });
 
