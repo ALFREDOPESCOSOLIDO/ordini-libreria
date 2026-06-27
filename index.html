@@ -1570,6 +1570,8 @@ function renderDetOrdForn() {
 async function stampaPdfOrdForn() {
   try {
   const id = _ordFornitoreId;
+  const righeArricchiteTest = _ordFornitoreCache?.righe||[];
+  alert('v7 — id:'+id+' | cache:'+righeArricchiteTest.length+' | primo prezzo:'+(righeArricchiteTest[0]?.prezzo||'n/a'));
   if (!id) { alert('Nessun ordine aperto'); return; }
   load(true);
 
