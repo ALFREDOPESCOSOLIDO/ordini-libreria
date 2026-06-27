@@ -1906,11 +1906,14 @@ async function caricaPdfAdozioni(file) {
 }
 
 async function confermaImportaPdf() {
-  const tipo  = document.getElementById('pdf-tipo-scuola').value;
-  const classe = _pdfMeta.classe;
-  const scuola = _pdfMeta.scuola;
-  const anno   = _pdfMeta.anno;
-  const libri  = _pdfLibri.filter(b => b.daacq);
+  const tipo   = document.getElementById('pdf-tipo-scuola').value;
+  const classeRaw = _pdfMeta.classe;              // es. "1ASU"
+  const scuola    = _pdfMeta.scuola;              // es. "MARCO TERENZIO VARRONE"
+  const anno      = _pdfMeta.anno;
+  const libri     = _pdfLibri.filter(b => b.daacq);
+
+  // Chiave classe = "NOME SCUOLA — CODICE CLASSE" per distinguere classi omonime di scuole diverse
+  const classeKey = scuola ? `${scuola} — ${classeRaw}` : classeRaw;
 
   if (!libri.length) { alert('Nessun libro da importare'); return; }
 
@@ -1931,21 +1934,20 @@ async function confermaImportaPdf() {
       materia:         b.materia.trim(),
       tipo_scuola:     tipo,
       scuola:          scuola,
-      classi:          [classe],
+      classi:          [classeKey],
       anno_scolastico: anno,
       da_acquistare:   true,
       sort_order:      nextOrder + i * 10,
     }));
 
-    // Upsert per ISBN+classe (evita duplicati)
+    // Upsert per ISBN: se esiste aggiunge la classe, altrimenti inserisce
     for (const row of rows) {
       const { data: existing } = await sb.from('catalogo_libri')
         .select('id, classi')
         .eq('isbn', row.isbn)
         .single();
       if (existing) {
-        // Aggiungi classe se non già presente
-        const classiAggiornate = [...new Set([...(existing.classi||[]), classe])];
+        const classiAggiornate = [...new Set([...(existing.classi||[]), classeKey])];
         await sb.from('catalogo_libri').update({ classi: classiAggiornate }).eq('id', existing.id);
       } else {
         await sb.from('catalogo_libri').insert(row);
