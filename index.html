@@ -2183,22 +2183,52 @@ function cercaLibroCarico(isbn) {
 
 async function _caricaRigheIsbn(isbn) {
   load(true);
-  // Tutte le righe_ordine_fornitore per questo ISBN con mancanti > 0
+  // Step 1: righe ordine fornitore per ISBN
   const { data: righe } = await sb.from('righe_ordine_fornitore')
-    .select('*,ordini_fornitore(id,data_ordine,fornitore),righe_ordine(ordini(clienti(nome,cognome)))')
-    .eq('isbn', isbn)
-    .order('created_at');
+    .select('*').eq('isbn', isbn).order('created_at');
 
-  // Filtra solo quelle con copie ancora mancanti
-  const aperte = (righe||[]).filter(r => (r.quantita_arrivata||0) < r.quantita);
-
-  load(false);
-
-  if (!aperte.length && !(righe||[]).length) {
+  if (!(righe||[]).length) {
+    load(false);
     document.getElementById('cm-risultato').style.display = 'none';
     alert('ISBN non trovato in nessun ordine fornitore.');
     return;
   }
+
+  // Step 2: dati ordine fornitore (data, fornitore)
+  const ofIds = [...new Set(righe.map(r=>r.ordine_fornitore_id).filter(Boolean))];
+  let ofMap = {};
+  if (ofIds.length) {
+    const {data:ofs} = await sb.from('ordini_fornitore').select('id,data_ordine,fornitore').in('id', ofIds);
+    (ofs||[]).forEach(o => { ofMap[o.id] = o; });
+  }
+
+  // Step 3: nome cliente tramite riga_ordine_id → righe_ordine → ordini → clienti
+  const rigaIds = righe.map(r=>r.riga_ordine_id).filter(Boolean);
+  let clienteRigaMap = {};
+  if (rigaIds.length) {
+    const {data:ros} = await sb.from('righe_ordine').select('id,ordine_id').in('id', rigaIds);
+    const ordIds = [...new Set((ros||[]).map(r=>r.ordine_id).filter(Boolean))];
+    if (ordIds.length) {
+      const {data:ords} = await sb.from('ordini').select('id,cliente_id').in('id', ordIds);
+      const clIds = [...new Set((ords||[]).map(o=>o.cliente_id).filter(Boolean))];
+      if (clIds.length) {
+        const {data:cls} = await sb.from('clienti').select('id,nome,cognome').in('id', clIds);
+        const clMap = {}; (cls||[]).forEach(c => { clMap[c.id]=c; });
+        const ordMap = {}; (ords||[]).forEach(o => { ordMap[o.id] = clMap[o.cliente_id]||null; });
+        (ros||[]).forEach(ro => { clienteRigaMap[ro.id] = ordMap[ro.ordine_id]||null; });
+      }
+    }
+  }
+
+  const righeArricchite = righe.map(r => ({
+    ...r,
+    ordini_fornitore: ofMap[r.ordine_fornitore_id]||null,
+    _cliente: clienteRigaMap[r.riga_ordine_id]||null,
+  }));
+
+  // Filtra solo quelle con copie ancora mancanti
+  const aperte = righeArricchite.filter(r => (r.quantita_arrivata||0) < r.quantita);
+  load(false);
 
   // Ordina per data ordine ASC (più vecchio prima)
   aperte.sort((a,b) => new Date(a.ordini_fornitore?.data_ordine) - new Date(b.ordini_fornitore?.data_ordine));
@@ -2218,7 +2248,7 @@ async function _caricaRigheIsbn(isbn) {
     ? '<tr><td colspan="6" class="text-muted" style="padding:1rem;text-align:center">Tutte le copie sono già arrivate</td></tr>'
     : aperte.map((r,i) => {
         const manca = r.quantita - (r.quantita_arrivata||0);
-        const cliente = nomeC(r.righe_ordine?.ordini?.clienti) || '—';
+        const cliente = nomeC(r._cliente) || '—';
         return `<tr style="background:${i%2?'#f9fafb':'#fff'}">
           <td style="padding:6px 8px;font-size:.85rem">${fmtDate(r.ordini_fornitore?.data_ordine)}</td>
           <td style="padding:6px 8px;font-size:.85rem">${r.ordini_fornitore?.fornitore||'—'}</td>
