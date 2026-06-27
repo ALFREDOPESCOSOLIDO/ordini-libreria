@@ -1,0 +1,1592 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ordini Libreria</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f0f4f8; color: #1a202c; min-height: 100vh; }
+
+    .screen-center { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .card { background: white; border-radius: 12px; padding: 2rem; width: 100%; max-width: 420px; box-shadow: 0 4px 24px rgba(0,0,0,.12); }
+    .card h1 { font-size: 1.4rem; margin-bottom: 1.5rem; color: #2d3748; text-align: center; }
+
+    #app { display: none; }
+    .layout { display: flex; min-height: 100vh; }
+    .sidebar { width: 230px; background: #1a365d; color: white; display: flex; flex-direction: column; flex-shrink: 0; }
+    .sidebar-title { padding: 1.25rem 1.5rem; font-size: 1rem; font-weight: 700; border-bottom: 1px solid rgba(255,255,255,.12); }
+    .sidebar-section { padding: .4rem 1rem .2rem; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.4); margin-top: .5rem; }
+    .sidebar a { display: block; padding: .65rem 1.5rem; color: rgba(255,255,255,.75); text-decoration: none; cursor: pointer; font-size: .88rem; transition: background .12s; }
+    .sidebar a:hover { background: rgba(255,255,255,.1); color: white; }
+    .sidebar a.active { background: rgba(255,255,255,.18); color: white; font-weight: 600; }
+    .sidebar-spacer { flex: 1; }
+    .sidebar-bottom { border-top: 1px solid rgba(255,255,255,.12); }
+
+    .main { flex: 1; overflow-y: auto; }
+    .page { display: none; padding: 2rem; max-width: 1100px; }
+    .page.active { display: block; }
+    .page-title { font-size: 1.5rem; font-weight: 700; color: #2d3748; margin-bottom: 1.5rem; }
+
+    .form-group { margin-bottom: 1rem; }
+    .form-group label { display: block; font-size: .75rem; font-weight: 700; color: #4a5568; margin-bottom: .35rem; text-transform: uppercase; letter-spacing: .04em; }
+    input[type=text], input[type=email], input[type=password], input[type=number], input[type=date], textarea, select {
+      width: 100%; padding: .6rem .8rem; border: 1px solid #cbd5e0; border-radius: 6px;
+      font-size: .9rem; background: white; color: #2d3748; transition: border-color .15s;
+    }
+    input:focus, textarea:focus, select:focus { outline: none; border-color: #4299e1; box-shadow: 0 0 0 3px rgba(66,153,225,.15); }
+    textarea { resize: vertical; min-height: 72px; }
+    input[type=checkbox] { width: auto; margin-right: .4rem; cursor: pointer; }
+
+    .btn { display: inline-flex; align-items: center; gap: .35rem; padding: .55rem 1.1rem; border: none; border-radius: 6px; font-size: .875rem; font-weight: 600; cursor: pointer; transition: opacity .12s; text-decoration: none; line-height: 1; white-space: nowrap; }
+    .btn:hover { opacity: .85; }
+    .btn-primary  { background: #3182ce; color: white; }
+    .btn-success  { background: #38a169; color: white; }
+    .btn-warning  { background: #d69e2e; color: white; }
+    .btn-danger   { background: #e53e3e; color: white; }
+    .btn-secondary{ background: #e2e8f0; color: #4a5568; }
+    .btn-purple   { background: #6b46c1; color: white; }
+    .btn-teal     { background: #2c7a7b; color: white; }
+    .btn-sm { padding: .35rem .75rem; font-size: .8rem; }
+    .btn-full { width: 100%; justify-content: center; }
+
+    .table-wrap { background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #f7fafc; padding: .65rem 1rem; text-align: left; font-size: .72rem; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: .05em; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
+    td { padding: .7rem 1rem; border-bottom: 1px solid #f0f0f0; font-size: .875rem; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr.clickable:hover td { background: #f7fafc; cursor: pointer; }
+
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .stat-card { background: white; border-radius: 8px; padding: 1.1rem 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,.08); border-left: 4px solid; }
+    .stat-card .lbl { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #718096; }
+    .stat-card .val { font-size: 2rem; font-weight: 800; margin-top: .15rem; }
+    .sc-blue   { border-color: #3182ce; } .sc-blue .val   { color: #3182ce; }
+    .sc-orange { border-color: #dd6b20; } .sc-orange .val { color: #dd6b20; }
+    .sc-red    { border-color: #e53e3e; } .sc-red .val    { color: #e53e3e; }
+    .sc-green  { border-color: #38a169; } .sc-green .val  { color: #38a169; }
+    .sc-purple { border-color: #6b46c1; } .sc-purple .val { color: #6b46c1; }
+
+    .badge { display: inline-block; padding: .2rem .65rem; border-radius: 20px; font-size: .72rem; font-weight: 700; white-space: nowrap; }
+    .b-blue   { background: #bee3f8; color: #2b6cb0; }
+    .b-orange { background: #feebc8; color: #c05621; }
+    .b-green  { background: #c6f6d5; color: #276749; }
+    .b-red    { background: #fed7d7; color: #c53030; }
+    .b-gray   { background: #e2e8f0; color: #718096; }
+    .b-purple { background: #e9d8fd; color: #553c9a; }
+    .b-yellow { background: #fefcbf; color: #744210; }
+    .b-teal   { background: #b2f5ea; color: #234e52; }
+
+    .header-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: .75rem; }
+    .flex { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+    .flex-end { justify-content: flex-end; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+    .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 1rem; }
+    .mt-1 { margin-top: .5rem; }
+    .mt-2 { margin-top: 1rem; }
+    .mt-3 { margin-top: 1.5rem; }
+    .text-muted { color: #718096; font-size: .875rem; }
+    .text-right { text-align: right; }
+    .text-sm { font-size: .8rem; }
+
+    .section-card { background: white; border-radius: 8px; padding: 1.25rem 1.5rem; box-shadow: 0 1px 4px rgba(0,0,0,.08); margin-bottom: 1.25rem; }
+    .section-card h3 { font-size: .95rem; font-weight: 700; color: #2d3748; margin-bottom: 1rem; }
+
+    .totali-box { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1.25rem; margin-top: 1.25rem; }
+    .tot-row { display: flex; justify-content: space-between; padding: .3rem 0; font-size: .9rem; }
+    .tot-row.big { font-size: 1.1rem; font-weight: 700; border-top: 2px solid #e2e8f0; margin-top: .5rem; padding-top: .6rem; }
+    .tot-row.verde { color: #38a169; }
+    .tot-row.rosso { color: #e53e3e; }
+
+    .libro-input-row { display: grid; grid-template-columns: 130px 1fr 110px 110px 85px 55px 34px; gap: .4rem; align-items: end; padding: .5rem 0; border-bottom: 1px solid #f0f0f0; }
+    .libro-input-row:last-child { border-bottom: none; }
+
+    .progress-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: #e2e8f0; margin-top: .3rem; }
+    .pb-ord  { background: #63b3ed; }
+    .pb-arr  { background: #68d391; }
+    .pb-cons { background: #38a169; }
+
+    .forn-libro-row { display: flex; align-items: center; gap: .75rem; padding: .5rem 0; border-bottom: 1px solid #f0f0f0; font-size: .875rem; }
+    .forn-libro-row:last-child { border-bottom: none; }
+    .forn-libro-row input[type=number] { width: 65px; }
+
+    .filter-bar { display: flex; gap: .75rem; margin-bottom: 1.25rem; flex-wrap: wrap; align-items: center; }
+    .filter-bar input, .filter-bar select { width: auto; }
+
+    .alert { padding: .75rem 1rem; border-radius: 6px; font-size: .875rem; margin-top: .75rem; }
+    .alert-error   { background: #fed7d7; color: #c53030; border: 1px solid #fc8181; }
+    .alert-success { background: #c6f6d5; color: #276749; }
+    .alert-info    { background: #bee3f8; color: #2b6cb0; }
+    .alert-warning { background: #fefcbf; color: #744210; border: 1px solid #f6e05e; }
+
+    .sub-form { background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem 1.25rem; margin-top: 1rem; }
+    .sub-form h4 { font-size: .9rem; font-weight: 700; margin-bottom: .75rem; color: #2d3748; }
+
+    .pending-group { margin-bottom: 1.25rem; }
+    .pending-group-title { font-size: .8rem; font-weight: 700; color: #718096; text-transform: uppercase; margin-bottom: .5rem; padding-bottom: .25rem; border-bottom: 1px solid #e2e8f0; }
+
+    #loading { position: fixed; inset: 0; background: rgba(255,255,255,.65); display: none; align-items: center; justify-content: center; z-index: 9999; font-weight: 700; color: #3182ce; font-size: 1rem; }
+
+    .libro-stato { display: inline-flex; gap: .2rem; font-size: .72rem; }
+    .ls-pill { padding: .1rem .4rem; border-radius: 3px; font-weight: 700; }
+    .ls-att { background: #e2e8f0; color: #718096; }
+    .ls-ord { background: #bee3f8; color: #2b6cb0; }
+    .ls-arr { background: #c6f6d5; color: #276749; }
+    .ls-con { background: #68d391; color: #1a202c; }
+
+    /* Autocomplete catalogo */
+    .cat-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #cbd5e0; border-radius: 6px; box-shadow: 0 4px 16px rgba(0,0,0,.12); z-index: 200; max-height: 280px; overflow-y: auto; }
+    .cat-item { padding: .6rem 1rem; cursor: pointer; font-size: .875rem; border-bottom: 1px solid #f0f0f0; }
+    .cat-item:last-child { border-bottom: none; }
+    .cat-item:hover { background: #ebf8ff; }
+    .cat-item .cat-isbn { font-size: .75rem; color: #718096; }
+
+    /* ISBN scan result */
+    .isbn-result { background: #ebf8ff; border: 1px solid #bee3f8; border-radius: 8px; padding: .75rem 1rem; margin-top: .5rem; }
+    .isbn-result .isbn-cliente { font-weight: 700; color: #2b6cb0; }
+  </style>
+</head>
+<body>
+<div id="loading">Caricamento…</div>
+
+<!-- SETUP -->
+<div id="screen-setup" class="screen-center" style="display:none">
+  <div class="card">
+    <h1>⚙️ Configurazione Supabase</h1>
+    <p style="font-size:.85rem;color:#718096;text-align:center;margin-bottom:1.5rem">Inserisci le credenziali del tuo progetto Supabase (una volta sola per browser).</p>
+    <div class="form-group"><label>Supabase URL</label><input type="text" id="cfg-url" placeholder="https://xxxx.supabase.co"></div>
+    <div class="form-group"><label>Anon Key</label><input type="text" id="cfg-key" placeholder="eyJhbGc…"></div>
+    <div id="setup-err" class="alert alert-error" style="display:none"></div>
+    <button class="btn btn-primary btn-full mt-2" onclick="saveSetup()">Salva e continua →</button>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div id="screen-login" class="screen-center" style="display:none">
+  <div class="card">
+    <h1>📚 Ordini Libreria</h1>
+    <div class="form-group"><label>Email</label><input type="email" id="login-email" autocomplete="email"></div>
+    <div class="form-group"><label>Password</label><input type="password" id="login-pwd" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div id="login-err" class="alert alert-error" style="display:none"></div>
+    <button class="btn btn-primary btn-full mt-2" onclick="doLogin()">Entra</button>
+    <p style="text-align:center;margin-top:1rem;font-size:.8rem"><a href="#" onclick="showSetup()" style="color:#3182ce">Modifica configurazione</a></p>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+<div class="layout">
+
+  <nav class="sidebar">
+    <div class="sidebar-title">📚 Ordini Libreria</div>
+    <div class="sidebar-section">Clienti</div>
+    <a id="nav-dashboard" onclick="navTo('dashboard')">🏠 Dashboard</a>
+    <a id="nav-ordini"    onclick="navTo('ordini')">📋 Ordini clienti</a>
+    <a id="nav-clienti"   onclick="navTo('clienti')">👤 Clienti</a>
+    <div class="sidebar-section">Catalogo</div>
+    <a id="nav-catalogo"  onclick="navTo('catalogo')">📖 Catalogo libri</a>
+    <div class="sidebar-section">Fornitori</div>
+    <a id="nav-ord-forn"  onclick="navTo('ord-forn')">🏭 Ordini fornitore</a>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-bottom">
+      <a onclick="doLogout()" style="color:rgba(255,255,255,.45);font-size:.85rem">🚪 Esci</a>
+    </div>
+  </nav>
+
+  <main class="main">
+
+    <!-- DASHBOARD -->
+    <div id="page-dashboard" class="page">
+      <div class="page-title">Dashboard</div>
+      <div class="stats-grid">
+        <div class="stat-card sc-blue">  <div class="lbl">Ordini aperti</div>    <div class="val" id="s-aperti">—</div></div>
+        <div class="stat-card sc-purple"><div class="lbl">Da ord. fornitore</div><div class="val" id="s-daord">—</div></div>
+        <div class="stat-card sc-orange"><div class="lbl">In arrivo</div>         <div class="val" id="s-arrivo">—</div></div>
+        <div class="stat-card sc-green"> <div class="lbl">Da consegnare</div>     <div class="val" id="s-dacons">—</div></div>
+        <div class="stat-card sc-red">   <div class="lbl">Da saldare</div>        <div class="val" id="s-saldare">—</div></div>
+      </div>
+      <div class="section-card">
+        <h3>Ultimi ordini clienti</h3>
+        <div id="dash-ordini"><span class="text-muted">Caricamento…</span></div>
+      </div>
+    </div>
+
+    <!-- ORDINI CLIENTI -->
+    <div id="page-ordini" class="page">
+      <div class="header-bar">
+        <div class="page-title" style="margin-bottom:0">Ordini clienti</div>
+        <button class="btn btn-primary" onclick="apriNuovoOrdine()">+ Nuovo ordine</button>
+      </div>
+      <div class="filter-bar">
+        <input type="text" id="f-cliente" placeholder="Cerca cliente…" oninput="loadOrdini()" style="width:200px">
+        <select id="f-stato" onchange="loadOrdini()" style="width:200px">
+          <option value="">Tutti gli stati</option>
+          <option value="confermato">Confermato</option>
+          <option value="parz_disponibile">Parz. disponibile</option>
+          <option value="parz_consegnato">Parz. consegnato</option>
+          <option value="consegnato">Consegnato</option>
+          <option value="saldato">Saldato</option>
+          <option value="annullato">Annullato</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Data</th><th>Cliente</th><th>Libri</th><th>Foderatura</th><th>Totale</th><th>Pagato</th><th>Residuo</th><th>Stato</th><th></th></tr></thead>
+          <tbody id="ordini-tb"><tr><td colspan="9" class="text-muted" style="padding:1rem">Caricamento…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- NUOVO ORDINE CLIENTE -->
+    <div id="page-ordine-nuovo" class="page">
+      <div class="header-bar">
+        <div class="page-title" style="margin-bottom:0">Nuovo ordine</div>
+        <button class="btn btn-secondary" onclick="navTo('ordini')">← Ordini</button>
+      </div>
+      <div class="section-card">
+        <h3>Cliente</h3>
+        <div class="grid-2">
+          <div class="form-group"><label>Cliente *</label>
+            <select id="n-cliente" onchange="onClienteSelezionato()"><option value="">— seleziona —</option></select></div>
+          <div class="form-group"><label>Data ordine</label><input type="date" id="n-data"></div>
+        </div>
+        <div class="flex mt-1">
+          <span class="text-muted text-sm">Cliente non in elenco?</span>
+          <button class="btn btn-secondary btn-sm" onclick="apriNuovoClienteDaOrdine()">+ Nuovo cliente</button>
+        </div>
+      </div>
+
+      <!-- Libri classe (appare solo per clienti medie) -->
+      <div id="libri-classe-box" class="section-card" style="display:none;background:#f0fff4;border:1px solid #9ae6b4">
+        <div class="header-bar" style="margin-bottom:.75rem">
+          <h3 style="margin-bottom:0;color:#276749">📚 Libri adottati — <span id="libri-classe-label"></span></h3>
+          <div class="flex">
+            <button class="btn btn-secondary btn-sm" onclick="selezionaTutti(true)">✓ Tutti</button>
+            <button class="btn btn-secondary btn-sm" onclick="selezionaTutti(false)">✕ Nessuno</button>
+          </div>
+        </div>
+        <p class="text-muted text-sm" style="margin-bottom:.75rem">Spunta i libri da ordinare, poi clicca "Aggiungi selezionati".</p>
+        <div id="libri-classe-list"></div>
+        <button class="btn btn-success mt-2" onclick="aggiungiLibriClasse()">+ Aggiungi selezionati all'ordine</button>
+      </div>
+
+      <!-- Catalogo search -->
+      <div class="section-card">
+        <h3>Aggiungi altri libri dal catalogo</h3>
+        <div style="position:relative">
+          <div class="form-group" style="margin-bottom:.5rem">
+            <label>Cerca per ISBN (scansiona barcode) o titolo</label>
+            <input type="text" id="cat-search" placeholder="Scansiona ISBN o digita titolo…" oninput="cercaCatalogo()" autocomplete="off">
+          </div>
+          <div id="cat-dropdown" class="cat-dropdown" style="display:none"></div>
+        </div>
+        <p class="text-muted text-sm">Oppure aggiungi manualmente un libro non in catalogo:</p>
+        <button class="btn btn-secondary btn-sm mt-1" onclick="addLibroRow()">+ Aggiungi riga manuale</button>
+      </div>
+
+      <div class="section-card">
+        <h3>Libri ordinati</h3>
+        <div style="overflow-x:auto">
+          <div style="display:grid;grid-template-columns:130px 1fr 110px 110px 85px 55px 34px;gap:.4rem;padding:.25rem 0;border-bottom:2px solid #e2e8f0;margin-bottom:.25rem">
+            <span class="text-sm" style="color:#718096;font-weight:700;text-transform:uppercase">ISBN</span>
+            <span class="text-sm" style="color:#718096;font-weight:700;text-transform:uppercase">Titolo *</span>
+            <span class="text-sm" style="color:#718096;font-weight:700;text-transform:uppercase">Autore</span>
+            <span class="text-sm" style="color:#718096;font-weight:700;text-transform:uppercase">Editore</span>
+            <span class="text-sm" style="color:#718096;font-weight:700;text-transform:uppercase">Prezzo €</span>
+            <span class="text-sm" style="color:#718096;font-weight:700;text-transform:uppercase">Qty</span>
+            <span></span>
+          </div>
+          <div id="libri-list"></div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h3>Servizi e pagamento iniziale</h3>
+        <div class="grid-3">
+          <div class="form-group" style="display:flex;flex-direction:column;justify-content:flex-end">
+            <label style="display:flex;align-items:center;text-transform:none;font-size:.9rem;font-weight:600;color:#2d3748;cursor:pointer">
+              <input type="checkbox" id="n-foderatura" onchange="toggleFod()"> Servizio foderatura</label>
+          </div>
+          <div class="form-group" id="fod-prezzo-wrap" style="display:none">
+            <label>Costo foderatura (€)</label>
+            <input type="number" id="n-fod-prezzo" value="0" min="0" step="0.50" oninput="aggRiepilogo()"></div>
+          <div class="form-group">
+            <label>Acconto versato ora (€)</label>
+            <input type="number" id="n-acconto" value="0" min="0" step="0.01" oninput="aggRiepilogo()"></div>
+        </div>
+        <div class="form-group mt-1"><label>Note</label><textarea id="n-note" rows="2"></textarea></div>
+        <div class="totali-box">
+          <div class="tot-row"><span>Totale libri</span><span id="r-libri">€ 0,00</span></div>
+          <div class="tot-row"><span>Foderatura</span><span id="r-fod">€ 0,00</span></div>
+          <div class="tot-row big"><span>TOTALE</span><span id="r-tot">€ 0,00</span></div>
+          <div class="tot-row verde"><span>Acconto versato</span><span id="r-acc">€ 0,00</span></div>
+          <div class="tot-row rosso"><span>Residuo da pagare</span><span id="r-res">€ 0,00</span></div>
+        </div>
+      </div>
+      <div id="n-err" class="alert alert-error" style="display:none"></div>
+      <div class="flex flex-end mt-2">
+        <button class="btn btn-secondary" onclick="navTo('ordini')">Annulla</button>
+        <button class="btn btn-primary" onclick="salvaOrdine()">💾 Salva ordine</button>
+      </div>
+    </div>
+
+    <!-- DETTAGLIO ORDINE CLIENTE -->
+    <div id="page-ordine-det" class="page">
+      <div class="header-bar">
+        <div>
+          <div class="page-title" style="margin-bottom:.2rem" id="det-title">Ordine</div>
+          <div style="color:#718096;font-size:.9rem" id="det-cliente"></div>
+        </div>
+        <div class="flex">
+          <span id="det-badge"></span>
+          <button class="btn btn-secondary" onclick="navTo('ordini')">← Ordini</button>
+        </div>
+      </div>
+      <div class="section-card">
+        <div class="header-bar" style="margin-bottom:.75rem">
+          <h3 style="margin-bottom:0">Libri ordinati</h3>
+          <button class="btn btn-purple btn-sm" id="btn-ord-forn" onclick="mostraFormOrdForn()">🏭 Ordina al fornitore</button>
+        </div>
+        <div style="overflow-x:auto"><div id="det-libri"></div></div>
+        <div id="form-ord-forn" class="sub-form" style="display:none">
+          <h4>🏭 Ordina al fornitore</h4>
+          <div class="grid-2">
+            <div class="form-group"><label>Fornitore</label><input type="text" id="of-fornitore"></div>
+            <div class="form-group"><label>Data ordine</label><input type="date" id="of-data"></div>
+          </div>
+          <div id="of-righe" style="margin:.5rem 0"></div>
+          <div class="form-group"><label>Note</label><input type="text" id="of-note"></div>
+          <div class="flex flex-end mt-1">
+            <button class="btn btn-secondary btn-sm" onclick="hideEl('form-ord-forn')">Annulla</button>
+            <button class="btn btn-purple btn-sm" onclick="salvaOrdFornDaOrdine()">✓ Crea ordine fornitore</button>
+          </div>
+        </div>
+      </div>
+      <div class="section-card">
+        <div class="header-bar" style="margin-bottom:.75rem">
+          <h3 style="margin-bottom:0">Consegne al cliente</h3>
+          <button class="btn btn-success btn-sm" onclick="mostraFormConsegna()">+ Registra consegna</button>
+        </div>
+        <div id="det-consegne"><span class="text-muted">Nessuna consegna registrata</span></div>
+        <div id="form-consegna" class="sub-form" style="display:none">
+          <h4>📦 Nuova consegna</h4>
+          <div class="form-group"><label>Data consegna</label><input type="date" id="c-data" style="max-width:200px"></div>
+          <div id="c-righe"></div>
+          <div class="form-group mt-1"><label>Note</label><input type="text" id="c-note"></div>
+          <div class="flex flex-end mt-1">
+            <button class="btn btn-secondary btn-sm" onclick="hideEl('form-consegna')">Annulla</button>
+            <button class="btn btn-success btn-sm" onclick="salvaConsegna()">✓ Registra</button>
+          </div>
+        </div>
+      </div>
+      <div class="section-card">
+        <div class="header-bar" style="margin-bottom:.75rem">
+          <h3 style="margin-bottom:0">Pagamenti</h3>
+          <button class="btn btn-primary btn-sm" onclick="mostraFormPagamento()">+ Registra pagamento</button>
+        </div>
+        <div id="det-pagamenti"><span class="text-muted">Nessun pagamento</span></div>
+        <div id="form-pagamento" class="sub-form" style="display:none">
+          <h4>💰 Nuovo pagamento</h4>
+          <div class="grid-3">
+            <div class="form-group"><label>Data</label><input type="date" id="p-data"></div>
+            <div class="form-group"><label>Importo (€)</label><input type="number" id="p-importo" min="0.01" step="0.01"></div>
+            <div class="form-group"><label>Tipo</label>
+              <select id="p-tipo">
+                <option value="acconto">Acconto</option>
+                <option value="parziale">Pagamento parziale</option>
+                <option value="saldo">Saldo finale</option>
+              </select></div>
+          </div>
+          <div class="form-group"><label>Note</label><input type="text" id="p-note"></div>
+          <div class="flex flex-end mt-1">
+            <button class="btn btn-secondary btn-sm" onclick="hideEl('form-pagamento')">Annulla</button>
+            <button class="btn btn-primary btn-sm" onclick="salvaPagamento()">✓ Registra</button>
+          </div>
+        </div>
+      </div>
+      <div class="totali-box">
+        <div class="tot-row"><span>Totale libri</span><span id="d-libri">—</span></div>
+        <div class="tot-row"><span>Foderatura</span><span id="d-fod">—</span></div>
+        <div class="tot-row big"><span>TOTALE ORDINE</span><span id="d-tot">—</span></div>
+        <div class="tot-row verde"><span>Totale pagato</span><span id="d-pag">—</span></div>
+        <div class="tot-row rosso"><span>Residuo da pagare</span><span id="d-res">—</span></div>
+      </div>
+      <div class="flex mt-3">
+        <button class="btn btn-danger btn-sm" onclick="eliminaOrdine()">🗑 Elimina ordine</button>
+      </div>
+    </div>
+
+    <!-- CATALOGO LIBRI -->
+    <div id="page-catalogo" class="page">
+      <div class="header-bar">
+        <div class="page-title" style="margin-bottom:0">Catalogo libri</div>
+        <button class="btn btn-teal" onclick="apriFormLibroCatalogo(null)">+ Aggiungi libro</button>
+      </div>
+      <div class="filter-bar">
+        <input type="text" id="f-cat-q" placeholder="Cerca per ISBN o titolo…" oninput="loadCatalogo()" style="width:260px">
+        <select id="f-cat-scuola" onchange="loadCatalogo()" style="width:180px">
+          <option value="">Tutte le scuole</option>
+          <option value="medie">Scuola Media</option>
+          <option value="superiori">Scuola Superiore</option>
+        </select>
+        <select id="f-cat-classe" onchange="loadCatalogo()" style="width:120px">
+          <option value="">Tutte le classi</option>
+          <option>1A</option><option>1B</option><option>1C</option>
+          <option>2A</option><option>2B</option><option>2C</option>
+          <option>3A</option>
+        </select>
+      </div>
+
+      <!-- Ricerca ISBN clienti -->
+      <div class="section-card" style="background:#ebf8ff;border:1px solid #bee3f8">
+        <h3 style="color:#2b6cb0">🔍 Ricerca ISBN — Chi ha ordinato questo libro?</h3>
+        <div style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap">
+          <div class="form-group" style="flex:1;min-width:220px;margin-bottom:0">
+            <label>Scansiona o digita ISBN</label>
+            <input type="text" id="isbn-lookup" placeholder="Scansiona barcode o digita ISBN…" oninput="cercaIsbnClienti(this.value)" autocomplete="off">
+          </div>
+        </div>
+        <div id="isbn-lookup-result" style="margin-top:.75rem"></div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ISBN</th><th>Titolo</th><th>Autore</th><th>Editore</th><th>Prezzo</th><th>Scuola/Classe</th><th></th></tr></thead>
+          <tbody id="catalogo-tb"><tr><td colspan="7" class="text-muted" style="padding:1rem">Caricamento…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- FORM LIBRO CATALOGO -->
+    <div id="page-libro-form" class="page">
+      <div class="header-bar">
+        <div class="page-title" style="margin-bottom:0" id="lf-title">Nuovo libro</div>
+        <button class="btn btn-secondary" onclick="navTo('catalogo')">← Catalogo</button>
+      </div>
+      <div class="section-card" style="max-width:700px">
+        <input type="hidden" id="lf-id">
+        <div class="grid-2">
+          <div class="form-group"><label>ISBN</label><input type="text" id="lf-isbn" autocomplete="off"></div>
+          <div class="form-group"><label>Prezzo (€)</label><input type="number" id="lf-prezzo" min="0" step="0.01"></div>
+        </div>
+        <div class="form-group"><label>Titolo *</label><input type="text" id="lf-titolo" autocomplete="off"></div>
+        <div class="grid-2">
+          <div class="form-group"><label>Autore</label><input type="text" id="lf-autore" autocomplete="off"></div>
+          <div class="form-group"><label>Editore</label><input type="text" id="lf-editore" autocomplete="off"></div>
+        </div>
+        <div class="grid-3">
+          <div class="form-group"><label>Tipo scuola</label>
+            <select id="lf-tipo">
+              <option value="">— non specificato —</option>
+              <option value="medie">Scuola Media</option>
+              <option value="superiori">Scuola Superiore</option>
+            </select></div>
+          <div class="form-group"><label>Scuola</label><input type="text" id="lf-scuola" placeholder="es. Sec. I Grado Arce"></div>
+          <div class="form-group"><label>Anno scolastico</label><input type="text" id="lf-anno" value="2026/2027"></div>
+        </div>
+        <div class="form-group"><label>Classi (separate da virgola)</label><input type="text" id="lf-classi" placeholder="es. 1A, 1B, 2A"></div>
+        <div class="form-group"><label>Materia</label><input type="text" id="lf-materia"></div>
+        <div id="lf-err" class="alert alert-error" style="display:none"></div>
+        <div class="flex flex-end mt-2">
+          <button class="btn btn-secondary" onclick="navTo('catalogo')">Annulla</button>
+          <button class="btn btn-teal" onclick="salvaLibroCatalogo()">💾 Salva</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ORDINI FORNITORE — LISTA -->
+    <div id="page-ord-forn" class="page">
+      <div class="header-bar">
+        <div class="page-title" style="margin-bottom:0">Ordini fornitore</div>
+        <button class="btn btn-purple" onclick="apriNuovoOrdForn()">+ Nuovo ordine fornitore</button>
+      </div>
+      <div class="section-card" id="pendenti-box" style="display:none">
+        <h3 style="color:#e53e3e">⚠️ Libri da ordinare al fornitore</h3>
+        <div id="pendenti-list"></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Data</th><th>Fornitore</th><th>N. titoli</th><th>Arrivati</th><th>Stato</th><th></th></tr></thead>
+          <tbody id="ord-forn-tb"><tr><td colspan="6" class="text-muted" style="padding:1rem">Caricamento…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- NUOVO ORDINE FORNITORE -->
+    <div id="page-ord-forn-nuovo" class="page">
+      <div class="header-bar">
+        <div class="page-title" style="margin-bottom:0">Nuovo ordine fornitore</div>
+        <button class="btn btn-secondary" onclick="navTo('ord-forn')">← Fornitore</button>
+      </div>
+      <div class="section-card">
+        <div class="grid-2">
+          <div class="form-group"><label>Fornitore</label><input type="text" id="nf-fornitore"></div>
+          <div class="form-group"><label>Data ordine</label><input type="date" id="nf-data"></div>
+        </div>
+        <div class="form-group"><label>Note</label><input type="text" id="nf-note"></div>
+      </div>
+      <div class="section-card">
+        <h3>Libri da ordinare</h3>
+        <p class="text-muted text-sm" style="margin-bottom:.75rem">Seleziona i libri degli ordini clienti non ancora ordinati al fornitore.</p>
+        <div id="nf-pending"><span class="text-muted">Caricamento…</span></div>
+      </div>
+      <div id="nf-err" class="alert alert-error" style="display:none"></div>
+      <div class="flex flex-end mt-2">
+        <button class="btn btn-secondary" onclick="navTo('ord-forn')">Annulla</button>
+        <button class="btn btn-purple" onclick="salvaOrdForn()">💾 Crea ordine fornitore</button>
+      </div>
+    </div>
+
+    <!-- DETTAGLIO ORDINE FORNITORE -->
+    <div id="page-ord-forn-det" class="page">
+      <div class="header-bar">
+        <div>
+          <div class="page-title" style="margin-bottom:.2rem" id="fd-title">Ordine fornitore</div>
+          <div class="text-muted text-sm" id="fd-sub"></div>
+        </div>
+        <div class="flex">
+          <span id="fd-badge"></span>
+          <button class="btn btn-secondary" onclick="navTo('ord-forn')">← Fornitore</button>
+        </div>
+      </div>
+
+      <!-- ISBN scan per trovare cliente -->
+      <div class="section-card" style="background:#f0fff4;border:1px solid #9ae6b4">
+        <h3 style="color:#276749">📷 Scansiona ISBN — trova il cliente</h3>
+        <p class="text-muted text-sm" style="margin-bottom:.75rem">Scansiona il barcode di un libro appena arrivato per vedere chi lo ha ordinato.</p>
+        <div style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap">
+          <div class="form-group" style="flex:1;min-width:220px;margin-bottom:0">
+            <label>ISBN</label>
+            <input type="text" id="scan-isbn-arrivo" placeholder="Scansiona barcode o digita ISBN…" oninput="scanIsbnArrivo(this.value)" autocomplete="off">
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('scan-isbn-arrivo').value='';document.getElementById('scan-isbn-result').innerHTML=''">✕ Cancella</button>
+        </div>
+        <div id="scan-isbn-result" style="margin-top:.75rem"></div>
+      </div>
+
+      <div class="section-card">
+        <div class="header-bar" style="margin-bottom:.75rem">
+          <h3 style="margin-bottom:0">Libri ordinati al fornitore</h3>
+          <button class="btn btn-success btn-sm" onclick="mostraFormArrivo()">📥 Registra arrivo</button>
+        </div>
+        <div style="overflow-x:auto"><div id="fd-libri"></div></div>
+        <div id="form-arrivo" class="sub-form" style="display:none">
+          <h4>📥 Registra arrivo merce</h4>
+          <div class="form-group"><label>Data arrivo</label><input type="date" id="arr-data" style="max-width:200px"></div>
+          <div id="arr-righe"></div>
+          <div class="form-group mt-1"><label>Note</label><input type="text" id="arr-note"></div>
+          <div class="flex flex-end mt-1">
+            <button class="btn btn-secondary btn-sm" onclick="hideEl('form-arrivo')">Annulla</button>
+            <button class="btn btn-success btn-sm" onclick="salvaArrivo()">✓ Registra arrivo</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h3>Storico arrivi</h3>
+        <div id="fd-arrivi"><span class="text-muted">Nessun arrivo registrato</span></div>
+      </div>
+    </div>
+
+    <!-- CLIENTI -->
+    <div id="page-clienti" class="page">
+      <div class="header-bar">
+        <div class="page-title" style="margin-bottom:0">Clienti</div>
+        <button class="btn btn-primary" onclick="apriFormCliente(null)">+ Nuovo cliente</button>
+      </div>
+      <div class="filter-bar">
+        <input type="text" id="f-clienti" placeholder="Cerca per nome…" oninput="loadClienti()" style="width:250px">
+        <select id="f-tipo-cliente" onchange="loadClienti()" style="width:180px">
+          <option value="">Tutti i tipi</option>
+          <option value="privato">Privati</option>
+          <option value="medie">Scuola Media</option>
+          <option value="superiori">Scuola Superiore</option>
+        </select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Nome</th><th>Tipo</th><th>Classe/Scuola</th><th>Telefono</th><th>Email</th><th></th></tr></thead>
+          <tbody id="clienti-tb"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- FORM CLIENTE -->
+    <div id="page-cliente-form" class="page">
+      <div class="header-bar">
+        <div class="page-title" style="margin-bottom:0" id="cf-title">Nuovo cliente</div>
+        <button class="btn btn-secondary" onclick="annullaFormCliente()">← Indietro</button>
+      </div>
+      <div class="section-card" style="max-width:620px">
+        <input type="hidden" id="cf-id">
+        <div class="grid-2">
+          <div class="form-group"><label>Nome *</label><input type="text" id="cf-nome" autocomplete="off"></div>
+          <div class="form-group"><label>Cognome</label><input type="text" id="cf-cognome" autocomplete="off"></div>
+        </div>
+        <div class="grid-3">
+          <div class="form-group"><label>Tipo cliente</label>
+            <select id="cf-tipo" onchange="toggleCampiScuola()">
+              <option value="privato">Privato</option>
+              <option value="medie">Scuola Media</option>
+              <option value="superiori">Scuola Superiore</option>
+            </select></div>
+          <div class="form-group" id="cf-classe-wrap" style="display:none"><label>Classe</label>
+            <select id="cf-classe">
+              <option value="">—</option>
+              <option>1A</option><option>1B</option><option>1C</option>
+              <option>2A</option><option>2B</option><option>2C</option>
+              <option>3A</option>
+            </select></div>
+          <div class="form-group" id="cf-scuola-wrap" style="display:none"><label>Scuola</label>
+            <input type="text" id="cf-scuola" placeholder="Nome scuola"></div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group"><label>Telefono</label><input type="text" id="cf-tel" autocomplete="off"></div>
+          <div class="form-group"><label>Email</label><input type="email" id="cf-email" autocomplete="off"></div>
+        </div>
+        <div class="form-group"><label>Note</label><textarea id="cf-note" rows="2"></textarea></div>
+        <div id="cf-err" class="alert alert-error" style="display:none"></div>
+        <div class="flex flex-end mt-2">
+          <button class="btn btn-secondary" onclick="annullaFormCliente()">Annulla</button>
+          <button class="btn btn-primary" onclick="salvaCliente()">💾 Salva</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+//  STATO GLOBALE
+// ══════════════════════════════════════════════════════
+let sb = null;
+let _ordineId = null, _ordineCache = null;
+let _ordFornitoreId = null, _ordFornitoreCache = null;
+let _dopoCliente = null;
+let _catTimer = null;
+
+// ══════════════════════════════════════════════════════
+//  SETUP / AUTH
+// ══════════════════════════════════════════════════════
+function getCfg() { return { url: localStorage.getItem('sb_url'), key: localStorage.getItem('sb_key') }; }
+function initSb(url, key) { sb = supabase.createClient(url, key); }
+function showSetup() { hide('screen-login'); hide('app'); show('screen-setup'); }
+function showLogin() { hide('screen-setup'); hide('app'); show('screen-login'); }
+function showApp()  { hide('screen-setup'); hide('screen-login'); show('app'); }
+
+async function boot() {
+  const { url, key } = getCfg();
+  if (!url || !key) { showSetup(); return; }
+  initSb(url, key);
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { showLogin(); return; }
+  showApp(); navTo('dashboard');
+}
+
+async function saveSetup() {
+  const url = document.getElementById('cfg-url').value.trim();
+  const key = document.getElementById('cfg-key').value.trim();
+  if (!url || !key) { showErr('setup-err', 'Compila entrambi i campi'); return; }
+  localStorage.setItem('sb_url', url); localStorage.setItem('sb_key', key);
+  initSb(url, key); hideEl('setup-err'); showLogin();
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pwd   = document.getElementById('login-pwd').value;
+  if (!email || !pwd) { showErr('login-err', 'Inserisci email e password'); return; }
+  load(true);
+  const { error } = await sb.auth.signInWithPassword({ email, password: pwd });
+  load(false);
+  if (error) { showErr('login-err', 'Credenziali non valide'); return; }
+  hideEl('login-err'); showApp(); navTo('dashboard');
+}
+async function doLogout() { await sb.auth.signOut(); showLogin(); }
+
+// ══════════════════════════════════════════════════════
+//  NAVIGAZIONE
+// ══════════════════════════════════════════════════════
+function navTo(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.sidebar a[id^="nav-"]').forEach(a => a.classList.remove('active'));
+  const pg  = document.getElementById('page-' + name);
+  const nav = document.getElementById('nav-' + name);
+  if (pg)  pg.classList.add('active');
+  if (nav) nav.classList.add('active');
+  const loaders = { dashboard: loadDashboard, ordini: loadOrdini, clienti: loadClienti, 'ord-forn': loadOrdForn, catalogo: loadCatalogo };
+  if (loaders[name]) loaders[name]();
+}
+
+function activatePage(name, navName) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.sidebar a[id^="nav-"]').forEach(a => a.classList.remove('active'));
+  const pg  = document.getElementById('page-' + name);
+  const nav = document.getElementById('nav-' + (navName || name));
+  if (pg)  pg.classList.add('active');
+  if (nav) nav.classList.add('active');
+}
+
+// ══════════════════════════════════════════════════════
+//  DASHBOARD
+// ══════════════════════════════════════════════════════
+async function loadDashboard() {
+  const { data: ordini } = await sb.from('ordini').select('id,stato,data_ordine');
+  document.getElementById('s-aperti').textContent  = (ordini||[]).filter(o => ['confermato','parz_disponibile','parz_consegnato'].includes(o.stato)).length;
+  document.getElementById('s-saldare').textContent = (ordini||[]).filter(o => o.stato === 'consegnato').length;
+  const { data: righe } = await sb.from('righe_ordine').select('quantita,quantita_ordinata_fornitore,quantita_arrivata,quantita_consegnata');
+  let daOrd = 0, inArrivo = 0, daCons = 0;
+  (righe||[]).forEach(r => {
+    if (r.quantita > (r.quantita_ordinata_fornitore||0)) daOrd++;
+    if ((r.quantita_ordinata_fornitore||0) > (r.quantita_arrivata||0)) inArrivo++;
+    if ((r.quantita_arrivata||0) > (r.quantita_consegnata||0)) daCons++;
+  });
+  document.getElementById('s-daord').textContent  = daOrd;
+  document.getElementById('s-arrivo').textContent = inArrivo;
+  document.getElementById('s-dacons').textContent = daCons;
+  const { data: ultimi } = await sb.from('ordini')
+    .select('id,data_ordine,stato,totale_libri,costo_foderatura,clienti(nome,cognome)')
+    .order('created_at', { ascending: false }).limit(10);
+  if (!(ultimi||[]).length) { document.getElementById('dash-ordini').innerHTML = '<span class="text-muted">Nessun ordine</span>'; return; }
+  document.getElementById('dash-ordini').innerHTML = `<table style="width:100%;border-collapse:collapse">
+    <thead><tr>${['Data','Cliente','Totale','Stato'].map(h=>`<th style="${thS}">${h}</th>`).join('')}</tr></thead>
+    <tbody>${ultimi.map(o=>`<tr class="clickable" onclick="aprireOrdine('${o.id}')">
+      <td style="${tdS}">${fmtDate(o.data_ordine)}</td>
+      <td style="${tdS}">${nomeC(o.clienti)}</td>
+      <td style="${tdS}">€ ${fmt(o.totale_libri+(o.costo_foderatura||0))}</td>
+      <td style="${tdS}">${badgeOrdine(o.stato)}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+// ══════════════════════════════════════════════════════
+//  ORDINI CLIENTI
+// ══════════════════════════════════════════════════════
+async function loadOrdini() {
+  const q     = (document.getElementById('f-cliente')?.value||'').toLowerCase();
+  const stato = document.getElementById('f-stato')?.value||'';
+  let query   = sb.from('ordini').select('id,data_ordine,stato,totale_libri,costo_foderatura,servizio_foderatura,clienti(nome,cognome)').order('data_ordine', { ascending: false });
+  if (stato) query = query.eq('stato', stato);
+  const { data: ordini } = await query;
+  let list = ordini||[];
+  if (q) list = list.filter(o => nomeC(o.clienti).toLowerCase().includes(q));
+  const ids = list.map(o=>o.id);
+  let pagMap = {};
+  if (ids.length) {
+    const { data: pags } = await sb.from('pagamenti').select('ordine_id,importo').in('ordine_id', ids);
+    (pags||[]).forEach(p => { pagMap[p.ordine_id] = (pagMap[p.ordine_id]||0)+p.importo; });
+  }
+  const tb = document.getElementById('ordini-tb');
+  if (!list.length) { tb.innerHTML = '<tr><td colspan="9" class="text-muted" style="padding:1.5rem;text-align:center">Nessun ordine</td></tr>'; return; }
+  tb.innerHTML = list.map(o => {
+    const tot = o.totale_libri+(o.costo_foderatura||0);
+    const pag = pagMap[o.id]||0;
+    const res = tot-pag;
+    return `<tr class="clickable" onclick="aprireOrdine('${o.id}')">
+      <td>${fmtDate(o.data_ordine)}</td><td><strong>${nomeC(o.clienti)}</strong></td>
+      <td>€ ${fmt(o.totale_libri)}</td>
+      <td>${o.servizio_foderatura?`✓ € ${fmt(o.costo_foderatura||0)}`:'—'}</td>
+      <td><strong>€ ${fmt(tot)}</strong></td>
+      <td style="color:#38a169">€ ${fmt(pag)}</td>
+      <td style="color:${res>0.009?'#e53e3e':'#38a169'}"><strong>€ ${fmt(res)}</strong></td>
+      <td>${badgeOrdine(o.stato)}</td>
+      <td><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();aprireOrdine('${o.id}')">Apri →</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Nuovo ordine cliente ──────────────────────────────
+async function apriNuovoOrdine() {
+  document.getElementById('n-data').value    = today();
+  document.getElementById('n-acconto').value = '0';
+  document.getElementById('n-foderatura').checked = false;
+  document.getElementById('n-fod-prezzo').value   = '0';
+  document.getElementById('fod-prezzo-wrap').style.display = 'none';
+  document.getElementById('n-note').value = '';
+  document.getElementById('cat-search').value = '';
+  hideEl('n-err'); hideEl('cat-dropdown');
+  document.getElementById('libri-list').innerHTML = '';
+  aggRiepilogo();
+  const { data: clienti } = await sb.from('clienti').select('id,nome,cognome,tipo_cliente,classe').order('nome');
+  const sel = document.getElementById('n-cliente');
+  sel.innerHTML = '<option value="">— seleziona cliente —</option>' +
+    (clienti||[]).map(c=>`<option value="${c.id}" data-tipo="${c.tipo_cliente||'privato'}" data-classe="${c.classe||''}">${nomeC(c)}${c.classe?' ('+c.classe+')':''}</option>`).join('');
+  activatePage('ordine-nuovo','ordini');
+}
+
+async function onClienteSelezionato() {
+  const sel = document.getElementById('n-cliente');
+  const opt = sel.options[sel.selectedIndex];
+  const tipo  = opt?.dataset?.tipo || '';
+  const classe = opt?.dataset?.classe || '';
+  const box = document.getElementById('libri-classe-box');
+
+  if (classe) {
+    document.getElementById('libri-classe-label').textContent = `Classe ${classe} — Sec. I Grado Arce`;
+    load(true);
+    const { data } = await sb.from('catalogo_libri')
+      .select('*')
+      .contains('classi', [classe])
+      .eq('tipo_scuola', 'medie')
+      .order('materia');
+    load(false);
+    if (!(data||[]).length) { box.style.display = 'none'; return; }
+    document.getElementById('libri-classe-list').innerHTML = (data||[]).map(b => `
+      <div style="display:flex;align-items:center;gap:.75rem;padding:.45rem 0;border-bottom:1px solid #c6f6d5;font-size:.875rem">
+        <input type="checkbox" id="lc-${b.id}" data-libro='${JSON.stringify(b).replace(/'/g,"&#39;")}' checked style="width:auto;flex-shrink:0">
+        <label for="lc-${b.id}" style="flex:1;cursor:pointer">
+          <strong>${b.materia}</strong> — ${b.titolo}
+          <span class="text-muted" style="font-size:.78rem"> · ${b.autore||''} · ${b.editore||''}</span>
+        </label>
+        <span style="font-weight:700;color:#276749;white-space:nowrap">€ ${fmt(b.prezzo)}</span>
+      </div>`).join('');
+    box.style.display = 'block';
+  } else {
+    box.style.display = 'none';
+  }
+}
+
+function selezionaTutti(val) {
+  document.querySelectorAll('#libri-classe-list input[type=checkbox]').forEach(cb => cb.checked = val);
+}
+
+function aggiungiLibriClasse() {
+  const checks = [...document.querySelectorAll('#libri-classe-list input[type=checkbox]:checked')];
+  if (!checks.length) { alert('Seleziona almeno un libro'); return; }
+  checks.forEach(cb => {
+    try {
+      const b = JSON.parse(cb.dataset.libro.replace(/&#39;/g,"'"));
+      addLibroRow(b);
+    } catch(e) {}
+  });
+  // Deseleziona tutti dopo aver aggiunto
+  selezionaTutti(false);
+}
+
+// ── Catalogo search nell'ordine ───────────────────────
+async function cercaCatalogo() {
+  clearTimeout(_catTimer);
+  const q = document.getElementById('cat-search').value.trim();
+  const dd = document.getElementById('cat-dropdown');
+  if (q.length < 2) { dd.style.display = 'none'; return; }
+  _catTimer = setTimeout(async () => {
+    const { data } = await sb.from('catalogo_libri')
+      .select('id,isbn,titolo,autore,editore,prezzo')
+      .or(`isbn.ilike.%${q}%,titolo.ilike.%${q}%`)
+      .limit(12);
+    if (!(data||[]).length) { dd.innerHTML = '<div class="cat-item text-muted">Nessun risultato</div>'; dd.style.display='block'; return; }
+    dd.innerHTML = data.map(b => `<div class="cat-item" onclick="aggiungiDaCatalogo(${JSON.stringify(b).replace(/"/g,'&quot;')})">
+      <div><strong>${b.titolo}</strong> <span style="color:#38a169;font-weight:700">€ ${fmt(b.prezzo)}</span></div>
+      <div class="cat-isbn">${b.isbn||''} · ${b.autore||''} · ${b.editore||''}</div>
+    </div>`).join('');
+    dd.style.display = 'block';
+  }, 250);
+}
+
+function aggiungiDaCatalogo(b) {
+  document.getElementById('cat-dropdown').style.display = 'none';
+  document.getElementById('cat-search').value = '';
+  addLibroRow(b);
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#cat-search') && !e.target.closest('#cat-dropdown'))
+    hideEl('cat-dropdown');
+});
+
+function addLibroRow(b) {
+  const d = document.createElement('div');
+  d.className = 'libro-input-row';
+  d.innerHTML = `
+    <input type="text" placeholder="ISBN" class="r-isbn" value="${b?.isbn||''}">
+    <input type="text" placeholder="Titolo *" class="r-titolo" value="${b?.titolo||''}">
+    <input type="text" placeholder="Autore" class="r-autore" value="${b?.autore||''}">
+    <input type="text" placeholder="Editore" class="r-editore" value="${b?.editore||''}">
+    <input type="number" placeholder="0.00" class="r-prezzo" min="0" step="0.01" value="${b?.prezzo||''}" oninput="aggRiepilogo()">
+    <input type="number" value="1" class="r-qty" min="1" oninput="aggRiepilogo()">
+    <button class="btn btn-danger btn-sm" onclick="this.closest('.libro-input-row').remove();aggRiepilogo()" title="Rimuovi">✕</button>`;
+  document.getElementById('libri-list').appendChild(d);
+  aggRiepilogo();
+}
+
+function toggleFod() {
+  document.getElementById('fod-prezzo-wrap').style.display = document.getElementById('n-foderatura').checked ? 'block' : 'none';
+  aggRiepilogo();
+}
+
+function aggRiepilogo() {
+  let totLibri = 0;
+  document.querySelectorAll('#libri-list .libro-input-row').forEach(r => {
+    totLibri += (parseFloat(r.querySelector('.r-prezzo')?.value||0)) * (parseInt(r.querySelector('.r-qty')?.value||1));
+  });
+  const fod = document.getElementById('n-foderatura').checked ? parseFloat(document.getElementById('n-fod-prezzo').value||0) : 0;
+  const acc = parseFloat(document.getElementById('n-acconto').value||0);
+  const tot = totLibri + fod;
+  document.getElementById('r-libri').textContent = `€ ${fmt(totLibri)}`;
+  document.getElementById('r-fod').textContent   = `€ ${fmt(fod)}`;
+  document.getElementById('r-tot').textContent   = `€ ${fmt(tot)}`;
+  document.getElementById('r-acc').textContent   = `€ ${fmt(acc)}`;
+  document.getElementById('r-res').textContent   = `€ ${fmt(tot-acc)}`;
+}
+
+async function salvaOrdine() {
+  const clienteId = document.getElementById('n-cliente').value;
+  if (!clienteId) { showErr('n-err','Seleziona un cliente'); return; }
+  const righeEl = [...document.querySelectorAll('#libri-list .libro-input-row')];
+  if (!righeEl.length) { showErr('n-err','Aggiungi almeno un libro'); return; }
+  const righe = righeEl.map(r => ({
+    isbn: r.querySelector('.r-isbn').value.trim(),
+    titolo: r.querySelector('.r-titolo').value.trim(),
+    autore: r.querySelector('.r-autore').value.trim(),
+    editore: r.querySelector('.r-editore').value.trim(),
+    prezzo_unitario: parseFloat(r.querySelector('.r-prezzo').value||0),
+    quantita: parseInt(r.querySelector('.r-qty').value||1),
+    quantita_ordinata_fornitore:0, quantita_arrivata:0, quantita_consegnata:0,
+  }));
+  if (righe.find(r=>!r.titolo)) { showErr('n-err','Il titolo è obbligatorio per ogni libro'); return; }
+  const foderatura = document.getElementById('n-foderatura').checked;
+  const costoFod   = foderatura ? parseFloat(document.getElementById('n-fod-prezzo').value||0) : 0;
+  const totLibri   = righe.reduce((s,r)=>s+r.prezzo_unitario*r.quantita, 0);
+  const acconto    = parseFloat(document.getElementById('n-acconto').value||0);
+  load(true);
+  const { data: ord, error } = await sb.from('ordini').insert({
+    cliente_id: clienteId, data_ordine: document.getElementById('n-data').value,
+    stato:'confermato', totale_libri:totLibri, costo_foderatura:costoFod,
+    servizio_foderatura:foderatura, note:document.getElementById('n-note').value.trim(),
+  }).select().single();
+  if (error) { load(false); showErr('n-err', error.message); return; }
+  await sb.from('righe_ordine').insert(righe.map(r=>({...r, ordine_id:ord.id})));
+  if (acconto > 0) {
+    await sb.from('pagamenti').insert({ ordine_id:ord.id, data:document.getElementById('n-data').value, importo:acconto, tipo:'acconto', note:"Acconto all'ordine" });
+  }
+  load(false);
+  await aprireOrdine(ord.id);
+}
+
+// ── Dettaglio ordine cliente ──────────────────────────
+async function aprireOrdine(id) {
+  _ordineId = id; load(true);
+  const [{ data: ordine },{ data: righe },{ data: pagamenti },{ data: consegne }] = await Promise.all([
+    sb.from('ordini').select('*,clienti(nome,cognome)').eq('id',id).single(),
+    sb.from('righe_ordine').select('*').eq('ordine_id',id).order('created_at'),
+    sb.from('pagamenti').select('*').eq('ordine_id',id).order('data'),
+    sb.from('consegne').select('*,righe_consegna(quantita,riga_ordine_id)').eq('ordine_id',id).order('data'),
+  ]);
+  load(false);
+  _ordineCache = { ordine, righe, pagamenti, consegne };
+  renderDetOrdine();
+  activatePage('ordine-det','ordini');
+}
+
+function renderDetOrdine() {
+  const { ordine, righe, pagamenti, consegne } = _ordineCache;
+  document.getElementById('det-title').textContent   = `Ordine del ${fmtDate(ordine.data_ordine)}`;
+  document.getElementById('det-cliente').textContent = nomeC(ordine.clienti);
+  document.getElementById('det-badge').innerHTML     = badgeOrdine(ordine.stato);
+  hideEl('form-ord-forn'); hideEl('form-consegna'); hideEl('form-pagamento');
+  const daoOrdinare = righe.some(r=>r.quantita>(r.quantita_ordinata_fornitore||0));
+  document.getElementById('btn-ord-forn').style.display = daoOrdinare?'inline-flex':'none';
+  document.getElementById('det-libri').innerHTML = `
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr>
+        <th style="${thS}">ISBN</th><th style="${thS}">Titolo</th><th style="${thS}">Prezzo</th>
+        <th style="${thS}" title="Ordinati dal cliente">Ord.</th>
+        <th style="${thS}" title="Ordinati al fornitore">Forn.</th>
+        <th style="${thS}" title="Arrivati dal fornitore">Arr.</th>
+        <th style="${thS}" title="Consegnati al cliente">Cons.</th>
+        <th style="${thS}">Disponibili</th>
+      </tr></thead>
+      <tbody>${righe.map(r=>{
+        const qof=r.quantita_ordinata_fornitore||0,qa=r.quantita_arrivata||0,qc=r.quantita_consegnata||0,disp=qa-qc;
+        return `<tr>
+          <td style="${tdS};font-size:.78rem;color:#718096">${r.isbn||'—'}</td>
+          <td style="${tdS}"><strong>${r.titolo}</strong><br><span class="text-muted text-sm">${r.autore||''}${r.editore?' · '+r.editore:''}</span></td>
+          <td style="${tdS}">€ ${fmt(r.prezzo_unitario)}</td>
+          <td style="${tdS};text-align:center">${r.quantita}</td>
+          <td style="${tdS};text-align:center;color:${qof<r.quantita?'#e53e3e':'#3182ce'}">${qof}</td>
+          <td style="${tdS};text-align:center;color:${qa<qof?'#dd6b20':'#38a169'}">${qa}</td>
+          <td style="${tdS};text-align:center;color:#38a169;font-weight:700">${qc}</td>
+          <td style="${tdS};text-align:center">${disp>0?`<span class="badge b-green">✓ ${disp}</span>`:disp===0&&qc>=r.quantita?`<span class="badge b-gray">—</span>`:`<span class="badge b-orange">0</span>`}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+    <p class="text-muted text-sm" style="margin-top:.5rem">Ord.=cliente · Forn.=ordinati fornitore · Arr.=arrivati · Cons.=consegnati · Disponibili=arrivati non ancora consegnati</p>`;
+
+  if (consegne.length) {
+    document.getElementById('det-consegne').innerHTML = consegne.map(c=>{
+      const lib=(c.righe_consegna||[]).map(rc=>{const r=righe.find(rr=>rr.id===rc.riga_ordine_id);return r?`${rc.quantita}× ${r.titolo}`:''}).filter(Boolean).join(', ')||'nessun libro';
+      return `<div style="padding:.5rem 0;border-bottom:1px solid #f0f0f0;font-size:.875rem"><strong>${fmtDate(c.data)}</strong> — ${lib}${c.note?` <span class="text-muted">· ${c.note}</span>`:''}</div>`;
+    }).join('');
+  } else { document.getElementById('det-consegne').innerHTML='<span class="text-muted">Nessuna consegna registrata</span>'; }
+
+  if (pagamenti.length) {
+    document.getElementById('det-pagamenti').innerHTML = `<table style="width:100%;border-collapse:collapse">
+      <thead><tr>${['Data','Tipo','Importo','Note',''].map(h=>`<th style="${thS}">${h}</th>`).join('')}</tr></thead>
+      <tbody>${pagamenti.map(p=>`<tr>
+        <td style="${tdS}">${fmtDate(p.data)}</td><td style="${tdS}">${labelTipo(p.tipo)}</td>
+        <td style="${tdS}"><strong>€ ${fmt(p.importo)}</strong></td>
+        <td style="${tdS};font-size:.82rem;color:#718096">${p.note||''}</td>
+        <td style="${tdS}"><button class="btn btn-danger btn-sm" onclick="elimPagamento('${p.id}')">✕</button></td>
+      </tr>`).join('')}</tbody></table>`;
+  } else { document.getElementById('det-pagamenti').innerHTML='<span class="text-muted">Nessun pagamento</span>'; }
+
+  const totP=pagamenti.reduce((s,p)=>s+p.importo,0), tot=ordine.totale_libri+(ordine.costo_foderatura||0);
+  document.getElementById('d-libri').textContent = `€ ${fmt(ordine.totale_libri)}`;
+  document.getElementById('d-fod').textContent   = ordine.servizio_foderatura?`€ ${fmt(ordine.costo_foderatura||0)}`:'—';
+  document.getElementById('d-tot').textContent   = `€ ${fmt(tot)}`;
+  document.getElementById('d-pag').textContent   = `€ ${fmt(totP)}`;
+  document.getElementById('d-res').textContent   = `€ ${fmt(tot-totP)}`;
+}
+
+function mostraFormOrdForn() {
+  const { righe } = _ordineCache;
+  const da = righe.filter(r=>r.quantita>(r.quantita_ordinata_fornitore||0));
+  if (!da.length) { alert('Tutti i libri sono già stati ordinati al fornitore.'); return; }
+  document.getElementById('of-data').value=''; document.getElementById('of-fornitore').value=''; document.getElementById('of-note').value='';
+  document.getElementById('of-data').value = today();
+  document.getElementById('of-righe').innerHTML = da.map(r=>{
+    const max=r.quantita-(r.quantita_ordinata_fornitore||0);
+    return `<div class="forn-libro-row">
+      <strong style="flex:1">${r.isbn?r.isbn+' — ':''}${r.titolo}</strong>
+      <span class="text-muted text-sm">${r.editore||''}</span>
+      <input type="number" value="${max}" min="1" max="${max}" data-riga="${r.id}" data-isbn="${r.isbn||''}" data-titolo="${r.titolo}">
+      <span class="text-muted text-sm">max ${max}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('form-ord-forn').style.display='block';
+}
+
+async function salvaOrdFornDaOrdine() {
+  const fornitore=document.getElementById('of-fornitore').value.trim();
+  const inputs=[...document.querySelectorAll('#of-righe input[data-riga]')];
+  const sel=inputs.map(i=>({riga_ordine_id:i.dataset.riga,isbn:i.dataset.isbn,titolo:i.dataset.titolo,quantita:parseInt(i.value||0)})).filter(r=>r.quantita>0);
+  if (!sel.length) { alert('Inserisci almeno una quantità'); return; }
+  load(true);
+  const { data: of } = await sb.from('ordini_fornitore').insert({ data_ordine:document.getElementById('of-data').value, fornitore:fornitore||null, stato:'inviato', note:document.getElementById('of-note').value.trim()||null }).select().single();
+  await sb.from('righe_ordine_fornitore').insert(sel.map(s=>({...s,ordine_fornitore_id:of.id,quantita_arrivata:0})));
+  for (const s of sel) {
+    const riga=_ordineCache.righe.find(r=>r.id===s.riga_ordine_id);
+    await sb.from('righe_ordine').update({quantita_ordinata_fornitore:(riga.quantita_ordinata_fornitore||0)+s.quantita}).eq('id',s.riga_ordine_id);
+  }
+  load(false);
+  await aprireOrdine(_ordineId);
+}
+
+function mostraFormConsegna() {
+  const { righe }=_ordineCache;
+  const disponibili=righe.filter(r=>(r.quantita_arrivata||0)>(r.quantita_consegnata||0));
+  document.getElementById('c-data').value=today(); document.getElementById('c-note').value='';
+  if (!disponibili.length) {
+    document.getElementById('c-righe').innerHTML='<div class="alert alert-info">Nessun libro disponibile per la consegna. Registra prima l\'arrivo dal fornitore.</div>';
+  } else {
+    document.getElementById('c-righe').innerHTML=disponibili.map(r=>{
+      const max=(r.quantita_arrivata||0)-(r.quantita_consegnata||0);
+      return `<div class="forn-libro-row">
+        <input type="checkbox" id="cr-${r.id}" checked style="width:auto;flex-shrink:0">
+        <label for="cr-${r.id}" style="flex:1;cursor:pointer">${r.titolo}</label>
+        <input type="number" id="cq-${r.id}" value="${max}" min="1" max="${max}">
+        <span class="text-muted text-sm">/ ${max} disponibili</span>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('form-consegna').style.display='block';
+}
+
+async function salvaConsegna() {
+  const { ordine,righe }=_ordineCache;
+  const disponibili=righe.filter(r=>(r.quantita_arrivata||0)>(r.quantita_consegnata||0));
+  const sel=disponibili.filter(r=>document.getElementById('cr-'+r.id)?.checked)
+    .map(r=>({riga_ordine_id:r.id,quantita:parseInt(document.getElementById('cq-'+r.id)?.value||0)})).filter(r=>r.quantita>0);
+  if (!sel.length) { alert('Seleziona almeno un libro da consegnare'); return; }
+  load(true);
+  const { data: cons }=await sb.from('consegne').insert({ordine_id:ordine.id,data:document.getElementById('c-data').value,note:document.getElementById('c-note').value.trim()||null}).select().single();
+  await sb.from('righe_consegna').insert(sel.map(s=>({...s,consegna_id:cons.id})));
+  for (const s of sel) {
+    const riga=righe.find(r=>r.id===s.riga_ordine_id);
+    await sb.from('righe_ordine').update({quantita_consegnata:(riga.quantita_consegnata||0)+s.quantita}).eq('id',s.riga_ordine_id);
+  }
+  const { data: aggRighe }=await sb.from('righe_ordine').select('quantita,quantita_consegnata').eq('ordine_id',ordine.id);
+  const tuttiCons=aggRighe.every(r=>r.quantita_consegnata>=r.quantita);
+  const alcuniCons=aggRighe.some(r=>r.quantita_consegnata>0);
+  await sb.from('ordini').update({stato:tuttiCons?'consegnato':alcuniCons?'parz_consegnato':ordine.stato}).eq('id',ordine.id);
+  load(false);
+  await aprireOrdine(ordine.id);
+}
+
+function mostraFormPagamento() {
+  const { ordine,pagamenti }=_ordineCache;
+  const tot=ordine.totale_libri+(ordine.costo_foderatura||0);
+  const pag=pagamenti.reduce((s,p)=>s+p.importo,0);
+  const res=Math.max(0,tot-pag);
+  document.getElementById('p-data').value=today();
+  document.getElementById('p-importo').value=fmt(res);
+  document.getElementById('p-tipo').value=pag===0?'acconto':res>0?'parziale':'saldo';
+  document.getElementById('p-note').value='';
+  document.getElementById('form-pagamento').style.display='block';
+}
+
+async function salvaPagamento() {
+  const importo=parseFloat(document.getElementById('p-importo').value);
+  if (!importo||importo<=0) { alert('Inserisci un importo valido'); return; }
+  const tipo=document.getElementById('p-tipo').value;
+  load(true);
+  await sb.from('pagamenti').insert({ordine_id:_ordineCache.ordine.id,data:document.getElementById('p-data').value,importo,tipo,note:document.getElementById('p-note').value.trim()||null});
+  if (tipo==='saldo') await sb.from('ordini').update({stato:'saldato'}).eq('id',_ordineCache.ordine.id);
+  load(false);
+  await aprireOrdine(_ordineId);
+}
+
+async function elimPagamento(id) {
+  if (!confirm('Eliminare questo pagamento?')) return;
+  load(true); await sb.from('pagamenti').delete().eq('id',id); load(false);
+  await aprireOrdine(_ordineId);
+}
+
+async function eliminaOrdine() {
+  if (!confirm('Eliminare definitivamente questo ordine e tutti i dati collegati?')) return;
+  load(true); await sb.from('ordini').delete().eq('id',_ordineId); load(false);
+  navTo('ordini');
+}
+
+// ══════════════════════════════════════════════════════
+//  CATALOGO LIBRI
+// ══════════════════════════════════════════════════════
+async function loadCatalogo() {
+  const q      = (document.getElementById('f-cat-q')?.value||'').trim();
+  const scuola = document.getElementById('f-cat-scuola')?.value||'';
+  const classe = document.getElementById('f-cat-classe')?.value||'';
+
+  let query = sb.from('catalogo_libri').select('*').order('materia').order('titolo');
+  if (q)      query = query.or(`isbn.ilike.%${q}%,titolo.ilike.%${q}%`);
+  if (scuola) query = query.eq('tipo_scuola', scuola);
+  if (classe) query = query.contains('classi', [classe]);
+
+  const { data } = await query;
+  const tb = document.getElementById('catalogo-tb');
+  if (!(data||[]).length) { tb.innerHTML='<tr><td colspan="7" class="text-muted" style="padding:1.5rem;text-align:center">Nessun libro trovato</td></tr>'; return; }
+  tb.innerHTML = (data||[]).map(b=>`<tr>
+    <td style="font-size:.78rem;color:#718096">${b.isbn||'—'}</td>
+    <td><strong>${b.titolo}</strong><br><span class="text-muted text-sm">${b.materia||''}</span></td>
+    <td class="text-muted text-sm">${b.autore||'—'}</td>
+    <td class="text-muted text-sm">${b.editore||'—'}</td>
+    <td><strong>€ ${fmt(b.prezzo)}</strong></td>
+    <td><span class="badge ${b.tipo_scuola==='medie'?'b-blue':'b-purple'}">${b.tipo_scuola||'—'}</span>
+        ${b.classi?(b.classi.map(c=>`<span class="badge b-gray" style="margin-left:.2rem">${c}</span>`).join('')):''}
+    </td>
+    <td><button class="btn btn-secondary btn-sm" onclick="apriFormLibroCatalogo('${b.id}')">Modifica</button></td>
+  </tr>`).join('');
+}
+
+// ── Ricerca ISBN → clienti che hanno ordinato ──────────
+async function cercaIsbnClienti(isbn) {
+  const el = document.getElementById('isbn-lookup-result');
+  isbn = (isbn||'').trim();
+  if (isbn.length < 5) { el.innerHTML=''; return; }
+  const { data } = await sb.from('righe_ordine')
+    .select('titolo,quantita,quantita_consegnata,ordini(data_ordine,stato,clienti(nome,cognome,classe,scuola))')
+    .ilike('isbn', isbn)
+    .neq('quantita_consegnata', null);
+  const attivi = (data||[]).filter(r => (r.quantita_consegnata||0) < r.quantita);
+  const consegnati = (data||[]).filter(r => (r.quantita_consegnata||0) >= r.quantita);
+  if (!(data||[]).length) { el.innerHTML='<div class="alert alert-warning">Nessun ordine trovato per questo ISBN.</div>'; return; }
+  let html = '';
+  if (attivi.length) {
+    html += `<div style="font-weight:700;color:#276749;margin-bottom:.5rem">📦 In attesa di consegna (${attivi.length})</div>`;
+    html += attivi.map(r=>{
+      const c=r.ordini?.clienti;
+      const classe=c?.classe?` — Classe ${c.classe}`:'';
+      const scuola=c?.scuola?` (${c.scuola})`:'';
+      return `<div class="isbn-result" style="margin-bottom:.4rem">
+        <div class="isbn-cliente">${nomeC(c)}${classe}${scuola}</div>
+        <div class="text-muted text-sm">${r.titolo} · Ord. ${fmtDate(r.ordini?.data_ordine)} · ${badgeOrdine(r.ordini?.stato)}</div>
+      </div>`;
+    }).join('');
+  }
+  if (consegnati.length) {
+    html += `<div style="font-weight:700;color:#718096;margin:.5rem 0 .25rem">✓ Già consegnati (${consegnati.length})</div>`;
+    html += consegnati.map(r=>{
+      const c=r.ordini?.clienti;
+      return `<div style="padding:.3rem 0;font-size:.85rem;color:#718096">${nomeC(c)} — ${r.titolo}</div>`;
+    }).join('');
+  }
+  el.innerHTML = html;
+}
+
+// ── Ricerca ISBN in form arrivo fornitore ─────────────
+async function scanIsbnArrivo(isbn) {
+  const el = document.getElementById('scan-isbn-result');
+  isbn = (isbn||'').trim();
+  if (isbn.length < 5) { el.innerHTML=''; return; }
+  const { data } = await sb.from('righe_ordine')
+    .select('id,titolo,quantita,quantita_consegnata,ordini(data_ordine,stato,clienti(nome,cognome,classe,scuola))')
+    .ilike('isbn', isbn);
+  const attivi = (data||[]).filter(r=>(r.quantita_consegnata||0)<r.quantita);
+  if (!(data||[]).length) { el.innerHTML='<div class="alert alert-warning">ISBN non trovato negli ordini clienti.</div>'; return; }
+  if (!attivi.length) { el.innerHTML='<div class="alert alert-success">✓ Questo libro risulta già consegnato a tutti i clienti.</div>'; return; }
+  el.innerHTML = `<div style="font-weight:700;color:#276749;margin-bottom:.5rem">📦 Da consegnare a:</div>` +
+    attivi.map(r=>{
+      const c=r.ordini?.clienti;
+      const classe=c?.classe?` — Classe ${c.classe}`:'';
+      const scuola=c?.scuola?` (${c.scuola})`:'';
+      return `<div class="isbn-result" style="margin-bottom:.4rem">
+        <div class="isbn-cliente">${nomeC(c)}${classe}${scuola}</div>
+        <div class="text-muted text-sm">${r.titolo} · Ord. ${fmtDate(r.ordini?.data_ordine)}</div>
+      </div>`;
+    }).join('');
+}
+
+// ── Form libro catalogo ────────────────────────────────
+async function apriFormLibroCatalogo(id) {
+  ['lf-id','lf-isbn','lf-titolo','lf-autore','lf-editore','lf-scuola','lf-anno','lf-classi','lf-materia'].forEach(f=>document.getElementById(f).value='');
+  document.getElementById('lf-tipo').value='';
+  document.getElementById('lf-anno').value='2026/2027';
+  document.getElementById('lf-prezzo').value='';
+  document.getElementById('lf-title').textContent = id?'Modifica libro':'Nuovo libro';
+  if (id) {
+    const { data: b } = await sb.from('catalogo_libri').select('*').eq('id',id).single();
+    document.getElementById('lf-id').value      = b.id;
+    document.getElementById('lf-isbn').value    = b.isbn||'';
+    document.getElementById('lf-titolo').value  = b.titolo||'';
+    document.getElementById('lf-autore').value  = b.autore||'';
+    document.getElementById('lf-editore').value = b.editore||'';
+    document.getElementById('lf-prezzo').value  = b.prezzo||'';
+    document.getElementById('lf-tipo').value    = b.tipo_scuola||'';
+    document.getElementById('lf-scuola').value  = b.scuola||'';
+    document.getElementById('lf-anno').value    = b.anno_scolastico||'2026/2027';
+    document.getElementById('lf-classi').value  = (b.classi||[]).join(', ');
+    document.getElementById('lf-materia').value = b.materia||'';
+  }
+  hideEl('lf-err');
+  activatePage('libro-form','catalogo');
+}
+
+async function salvaLibroCatalogo() {
+  const titolo = document.getElementById('lf-titolo').value.trim();
+  if (!titolo) { showErr('lf-err','Il titolo è obbligatorio'); return; }
+  const classiStr = document.getElementById('lf-classi').value.trim();
+  const classi = classiStr ? classiStr.split(',').map(s=>s.trim()).filter(Boolean) : [];
+  const data = {
+    isbn:     document.getElementById('lf-isbn').value.trim()||null,
+    titolo,
+    autore:   document.getElementById('lf-autore').value.trim()||null,
+    editore:  document.getElementById('lf-editore').value.trim()||null,
+    prezzo:   parseFloat(document.getElementById('lf-prezzo').value)||null,
+    tipo_scuola: document.getElementById('lf-tipo').value||null,
+    scuola:   document.getElementById('lf-scuola').value.trim()||null,
+    anno_scolastico: document.getElementById('lf-anno').value.trim()||'2026/2027',
+    classi:   classi.length?classi:null,
+    materia:  document.getElementById('lf-materia').value.trim()||null,
+  };
+  load(true);
+  const id = document.getElementById('lf-id').value;
+  if (id) { await sb.from('catalogo_libri').update(data).eq('id',id); }
+  else    { await sb.from('catalogo_libri').insert(data); }
+  load(false);
+  navTo('catalogo');
+}
+
+// ══════════════════════════════════════════════════════
+//  ORDINI FORNITORE
+// ══════════════════════════════════════════════════════
+async function loadOrdForn() {
+  const { data: pending } = await sb.from('righe_ordine')
+    .select('id,isbn,titolo,quantita,quantita_ordinata_fornitore,ordini(data_ordine,clienti(nome,cognome))')
+    .filter('quantita_ordinata_fornitore','lt','quantita');
+  const pend=(pending||[]).filter(r=>r.quantita>(r.quantita_ordinata_fornitore||0));
+  if (pend.length) {
+    document.getElementById('pendenti-box').style.display='block';
+    document.getElementById('pendenti-list').innerHTML=`<table style="width:100%;border-collapse:collapse">
+      <thead><tr>${['Cliente','Titolo','ISBN','Da ordinare'].map(h=>`<th style="${thS}">${h}</th>`).join('')}</tr></thead>
+      <tbody>${pend.map(r=>`<tr>
+        <td style="${tdS}">${nomeC(r.ordini?.clienti)} <span class="text-muted text-sm">(${fmtDate(r.ordini?.data_ordine)})</span></td>
+        <td style="${tdS}"><strong>${r.titolo}</strong></td>
+        <td style="${tdS};font-size:.8rem;color:#718096">${r.isbn||'—'}</td>
+        <td style="${tdS}"><span class="badge b-red">${r.quantita-(r.quantita_ordinata_fornitore||0)}</span></td>
+      </tr>`).join('')}</tbody></table>`;
+  } else { document.getElementById('pendenti-box').style.display='none'; }
+
+  const { data: ofs }=await sb.from('ordini_fornitore').select('id,data_ordine,fornitore,stato').order('data_ordine',{ascending:false});
+  if (!(ofs||[]).length) { document.getElementById('ord-forn-tb').innerHTML='<tr><td colspan="6" class="text-muted" style="padding:1.5rem;text-align:center">Nessun ordine fornitore</td></tr>'; return; }
+  const ofIds=ofs.map(o=>o.id);
+  const { data: rof }=await sb.from('righe_ordine_fornitore').select('ordine_fornitore_id,quantita,quantita_arrivata').in('ordine_fornitore_id',ofIds);
+  const stats={};
+  (rof||[]).forEach(r=>{
+    if (!stats[r.ordine_fornitore_id]) stats[r.ordine_fornitore_id]={titoli:0,totQty:0,arrQty:0};
+    stats[r.ordine_fornitore_id].titoli++; stats[r.ordine_fornitore_id].totQty+=r.quantita; stats[r.ordine_fornitore_id].arrQty+=(r.quantita_arrivata||0);
+  });
+  document.getElementById('ord-forn-tb').innerHTML=ofs.map(o=>{
+    const s=stats[o.id]||{titoli:0,totQty:0,arrQty:0};
+    return `<tr class="clickable" onclick="aprireOrdForn('${o.id}')">
+      <td>${fmtDate(o.data_ordine)}</td><td><strong>${o.fornitore||'—'}</strong></td>
+      <td>${s.titoli} ${s.titoli===1?'titolo':'titoli'}</td>
+      <td><span class="badge ${s.arrQty>=s.totQty?'b-green':'b-orange'}">${s.arrQty}/${s.totQty}</span></td>
+      <td>${badgeForn(o.stato)}</td>
+      <td><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();aprireOrdForn('${o.id}')">Apri →</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function apriNuovoOrdForn() {
+  document.getElementById('nf-data').value=today(); document.getElementById('nf-fornitore').value=''; document.getElementById('nf-note').value='';
+  hideEl('nf-err');
+  const { data: righe }=await sb.from('righe_ordine').select('id,isbn,titolo,quantita,quantita_ordinata_fornitore,ordini(id,data_ordine,clienti(nome,cognome))');
+  const da=(righe||[]).filter(r=>r.quantita>(r.quantita_ordinata_fornitore||0));
+  if (!da.length) {
+    document.getElementById('nf-pending').innerHTML='<div class="alert alert-success">✓ Tutti i libri sono già stati ordinati al fornitore.</div>';
+  } else {
+    document.getElementById('nf-pending').innerHTML=`
+      <div style="display:grid;grid-template-columns:24px 130px 1fr 100px 80px 100px;gap:.5rem;align-items:center;padding:.3rem 0;border-bottom:2px solid #e2e8f0;margin-bottom:.5rem">
+        <span></span><span class="text-sm" style="font-weight:700;color:#718096;text-transform:uppercase">ISBN</span>
+        <span class="text-sm" style="font-weight:700;color:#718096;text-transform:uppercase">Titolo — Cliente</span>
+        <span class="text-sm" style="font-weight:700;color:#718096;text-transform:uppercase">Data ord.</span>
+        <span class="text-sm" style="font-weight:700;color:#718096;text-transform:uppercase">Qty</span>
+        <span class="text-sm" style="font-weight:700;color:#718096;text-transform:uppercase">Da ord.</span>
+      </div>
+      ${da.map(r=>{const max=r.quantita-(r.quantita_ordinata_fornitore||0);return `
+        <div style="display:grid;grid-template-columns:24px 130px 1fr 100px 80px 100px;gap:.5rem;align-items:center;padding:.4rem 0;border-bottom:1px solid #f0f0f0;font-size:.875rem">
+          <input type="checkbox" data-riga="${r.id}" data-isbn="${r.isbn||''}" data-titolo="${r.titolo}" checked style="width:auto">
+          <span style="font-size:.78rem;color:#718096">${r.isbn||'—'}</span>
+          <div><strong>${r.titolo}</strong><br><span class="text-muted text-sm">${nomeC(r.ordini?.clienti)}</span></div>
+          <span class="text-muted text-sm">${fmtDate(r.ordini?.data_ordine)}</span>
+          <span>${r.quantita}</span>
+          <input type="number" class="nf-qty" data-max="${max}" value="${max}" min="1" max="${max}" style="width:70px">
+        </div>`;}).join('')}`;
+  }
+  activatePage('ord-forn-nuovo','ord-forn');
+}
+
+async function salvaOrdForn() {
+  const fornitore=document.getElementById('nf-fornitore').value.trim();
+  const checks=[...document.querySelectorAll('#nf-pending input[type=checkbox][data-riga]')];
+  const sel=checks.filter(c=>c.checked).map(c=>{
+    const row=c.closest('div'); const qty=row.querySelector('.nf-qty');
+    return {riga_ordine_id:c.dataset.riga,isbn:c.dataset.isbn,titolo:c.dataset.titolo,quantita:parseInt(qty?.value||0)};
+  }).filter(r=>r.quantita>0);
+  if (!sel.length) { showErr('nf-err','Seleziona almeno un libro'); return; }
+  load(true);
+  const { data: of }=await sb.from('ordini_fornitore').insert({data_ordine:document.getElementById('nf-data').value,fornitore:fornitore||null,stato:'inviato',note:document.getElementById('nf-note').value.trim()||null}).select().single();
+  await sb.from('righe_ordine_fornitore').insert(sel.map(s=>({...s,ordine_fornitore_id:of.id,quantita_arrivata:0})));
+  for (const s of sel) {
+    const { data: r }=await sb.from('righe_ordine').select('quantita_ordinata_fornitore').eq('id',s.riga_ordine_id).single();
+    await sb.from('righe_ordine').update({quantita_ordinata_fornitore:(r.quantita_ordinata_fornitore||0)+s.quantita}).eq('id',s.riga_ordine_id);
+  }
+  load(false);
+  await aprireOrdForn(of.id);
+}
+
+async function aprireOrdForn(id) {
+  _ordFornitoreId=id; load(true);
+  const [{data:of},{data:righe},{data:arrivi}]=await Promise.all([
+    sb.from('ordini_fornitore').select('*').eq('id',id).single(),
+    sb.from('righe_ordine_fornitore').select('*,righe_ordine(ordine_id,ordini(clienti(nome,cognome)))').eq('ordine_fornitore_id',id).order('created_at'),
+    sb.from('arrivi_fornitore').select('*,righe_arrivo(quantita,riga_ordine_fornitore_id)').eq('ordine_fornitore_id',id).order('data'),
+  ]);
+  load(false);
+  _ordFornitoreCache={of,righe,arrivi};
+  renderDetOrdForn();
+  activatePage('ord-forn-det','ord-forn');
+}
+
+function renderDetOrdForn() {
+  const {of,righe,arrivi}=_ordFornitoreCache;
+  document.getElementById('fd-title').textContent=`Ordine fornitore del ${fmtDate(of.data_ordine)}`;
+  document.getElementById('fd-sub').textContent=of.fornitore||'Fornitore non specificato';
+  document.getElementById('fd-badge').innerHTML=badgeForn(of.stato);
+  hideEl('form-arrivo');
+  document.getElementById('scan-isbn-arrivo').value='';
+  document.getElementById('scan-isbn-result').innerHTML='';
+  document.getElementById('fd-libri').innerHTML=`
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr><th style="${thS}">ISBN</th><th style="${thS}">Titolo</th><th style="${thS}">Cliente</th><th style="${thS}">Ord.</th><th style="${thS}">Arrivati</th><th style="${thS}">Mancanti</th></tr></thead>
+      <tbody>${righe.map(r=>{const arr=r.quantita_arrivata||0,manca=r.quantita-arr;return `<tr>
+        <td style="${tdS};font-size:.78rem;color:#718096">${r.isbn||'—'}</td>
+        <td style="${tdS}"><strong>${r.titolo}</strong></td>
+        <td style="${tdS};font-size:.82rem">${nomeC(r.righe_ordine?.ordini?.clienti)}</td>
+        <td style="${tdS};text-align:center">${r.quantita}</td>
+        <td style="${tdS};text-align:center"><span class="badge ${arr>=r.quantita?'b-green':'b-orange'}">${arr}</span></td>
+        <td style="${tdS};text-align:center">${manca>0?`<span class="badge b-red">${manca}</span>`:'<span class="badge b-green">✓</span>'}</td>
+      </tr>`}).join('')}</tbody>
+    </table>`;
+  if (arrivi.length) {
+    document.getElementById('fd-arrivi').innerHTML=arrivi.map(a=>{
+      const det=(a.righe_arrivo||[]).map(ra=>{const r=righe.find(rr=>rr.id===ra.riga_ordine_fornitore_id);return r?`${ra.quantita}× ${r.titolo}`:''}).filter(Boolean).join(', ');
+      return `<div style="padding:.5rem 0;border-bottom:1px solid #f0f0f0;font-size:.875rem"><strong>${fmtDate(a.data)}</strong> — ${det||'—'}${a.note?` <span class="text-muted">· ${a.note}</span>`:''}</div>`;
+    }).join('');
+  } else { document.getElementById('fd-arrivi').innerHTML='<span class="text-muted">Nessun arrivo registrato</span>'; }
+}
+
+function mostraFormArrivo() {
+  const {righe}=_ordFornitoreCache;
+  const daArrivare=righe.filter(r=>(r.quantita_arrivata||0)<r.quantita);
+  document.getElementById('arr-data').value=today(); document.getElementById('arr-note').value='';
+  if (!daArrivare.length) {
+    document.getElementById('arr-righe').innerHTML='<div class="alert alert-success">Tutti i libri sono già arrivati!</div>';
+  } else {
+    document.getElementById('arr-righe').innerHTML=daArrivare.map(r=>{
+      const max=r.quantita-(r.quantita_arrivata||0);
+      return `<div class="forn-libro-row">
+        <input type="checkbox" id="ar-${r.id}" checked style="width:auto;flex-shrink:0">
+        <label for="ar-${r.id}" style="flex:1;cursor:pointer"><strong>${r.isbn||''}</strong> ${r.titolo}</label>
+        <input type="number" id="aq-${r.id}" value="${max}" min="1" max="${max}">
+        <span class="text-muted text-sm">/ ${max} mancanti</span>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('form-arrivo').style.display='block';
+}
+
+async function salvaArrivo() {
+  const {of,righe}=_ordFornitoreCache;
+  const daArr=righe.filter(r=>(r.quantita_arrivata||0)<r.quantita);
+  const sel=daArr.filter(r=>document.getElementById('ar-'+r.id)?.checked)
+    .map(r=>({riga_ordine_fornitore_id:r.id,riga_ordine_id:r.riga_ordine_id,quantita:parseInt(document.getElementById('aq-'+r.id)?.value||0)}))
+    .filter(r=>r.quantita>0);
+  if (!sel.length) { alert('Seleziona almeno un libro'); return; }
+  load(true);
+  const {data:arr}=await sb.from('arrivi_fornitore').insert({ordine_fornitore_id:of.id,data:document.getElementById('arr-data').value,note:document.getElementById('arr-note').value.trim()||null}).select().single();
+  await sb.from('righe_arrivo').insert(sel.map(s=>({arrivo_id:arr.id,riga_ordine_fornitore_id:s.riga_ordine_fornitore_id,quantita:s.quantita})));
+  for (const s of sel) {
+    const rof=righe.find(r=>r.id===s.riga_ordine_fornitore_id);
+    await sb.from('righe_ordine_fornitore').update({quantita_arrivata:(rof.quantita_arrivata||0)+s.quantita}).eq('id',s.riga_ordine_fornitore_id);
+    if (s.riga_ordine_id) {
+      const {data:ro}=await sb.from('righe_ordine').select('quantita_arrivata').eq('id',s.riga_ordine_id).single();
+      await sb.from('righe_ordine').update({quantita_arrivata:(ro.quantita_arrivata||0)+s.quantita}).eq('id',s.riga_ordine_id);
+      const {data:ordineRighe}=await sb.from('righe_ordine').select('quantita,quantita_arrivata,ordine_id').eq('id',s.riga_ordine_id).single();
+      if (ordineRighe?.ordine_id) {
+        const {data:tutteRighe}=await sb.from('righe_ordine').select('quantita,quantita_arrivata').eq('ordine_id',ordineRighe.ordine_id);
+        const tutteDisp=(tutteRighe||[]).every(r=>(r.quantita_arrivata||0)>=r.quantita);
+        const alcuneDisp=(tutteRighe||[]).some(r=>(r.quantita_arrivata||0)>0);
+        const {data:ordCorrente}=await sb.from('ordini').select('stato').eq('id',ordineRighe.ordine_id).single();
+        if (ordCorrente&&!['consegnato','saldato','annullato'].includes(ordCorrente.stato)) {
+          await sb.from('ordini').update({stato:tutteDisp||alcuneDisp?'parz_disponibile':ordCorrente.stato}).eq('id',ordineRighe.ordine_id);
+        }
+      }
+    }
+  }
+  const {data:aggRof}=await sb.from('righe_ordine_fornitore').select('quantita,quantita_arrivata').eq('ordine_fornitore_id',of.id);
+  const tuttoArr=aggRof.every(r=>(r.quantita_arrivata||0)>=r.quantita);
+  const parteArr=aggRof.some(r=>(r.quantita_arrivata||0)>0);
+  await sb.from('ordini_fornitore').update({stato:tuttoArr?'arrivato':parteArr?'parz_arrivato':'inviato'}).eq('id',of.id);
+  load(false);
+  await aprireOrdForn(of.id);
+}
+
+// ══════════════════════════════════════════════════════
+//  CLIENTI
+// ══════════════════════════════════════════════════════
+async function loadClienti() {
+  const q    = (document.getElementById('f-clienti')?.value||'').toLowerCase();
+  const tipo = document.getElementById('f-tipo-cliente')?.value||'';
+  let query  = sb.from('clienti').select('*').order('nome');
+  if (tipo) query = query.eq('tipo_cliente', tipo);
+  const { data: clienti } = await query;
+  let list = (clienti||[]);
+  if (q) list = list.filter(c=>nomeC(c).toLowerCase().includes(q));
+  const tb = document.getElementById('clienti-tb');
+  if (!list.length) { tb.innerHTML='<tr><td colspan="6" class="text-muted" style="padding:1.5rem;text-align:center">Nessun cliente</td></tr>'; return; }
+  tb.innerHTML = list.map(c=>{
+    const tipo = c.tipo_cliente||'privato';
+    const tipoBadge = tipo==='medie'?'<span class="badge b-blue">Media</span>':tipo==='superiori'?'<span class="badge b-purple">Superiore</span>':'<span class="badge b-gray">Privato</span>';
+    const classeScuola = [c.classe,c.scuola].filter(Boolean).join(' · ')||'—';
+    return `<tr>
+      <td><strong>${nomeC(c)}</strong></td>
+      <td>${tipoBadge}</td>
+      <td class="text-muted text-sm">${classeScuola}</td>
+      <td>${c.telefono||'—'}</td><td>${c.email||'—'}</td>
+      <td><button class="btn btn-secondary btn-sm" onclick="apriFormCliente('${c.id}')">Modifica</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function toggleCampiScuola() {
+  const tipo = document.getElementById('cf-tipo').value;
+  document.getElementById('cf-classe-wrap').style.display = tipo==='medie'?'block':'none';
+  document.getElementById('cf-scuola-wrap').style.display = (tipo==='medie'||tipo==='superiori')?'block':'none';
+}
+
+async function apriFormCliente(id) {
+  _dopoCliente='clienti';
+  ['cf-id','cf-nome','cf-cognome','cf-tel','cf-email','cf-note','cf-scuola'].forEach(f=>document.getElementById(f).value='');
+  document.getElementById('cf-tipo').value='privato';
+  document.getElementById('cf-classe').value='';
+  toggleCampiScuola();
+  document.getElementById('cf-title').textContent = id?'Modifica cliente':'Nuovo cliente';
+  if (id) {
+    const { data: c } = await sb.from('clienti').select('*').eq('id',id).single();
+    document.getElementById('cf-id').value      = c.id;
+    document.getElementById('cf-nome').value    = c.nome||'';
+    document.getElementById('cf-cognome').value = c.cognome||'';
+    document.getElementById('cf-tel').value     = c.telefono||'';
+    document.getElementById('cf-email').value   = c.email||'';
+    document.getElementById('cf-note').value    = c.note||'';
+    document.getElementById('cf-tipo').value    = c.tipo_cliente||'privato';
+    document.getElementById('cf-classe').value  = c.classe||'';
+    document.getElementById('cf-scuola').value  = c.scuola||'';
+    toggleCampiScuola();
+  }
+  hideEl('cf-err');
+  activatePage('cliente-form','clienti');
+}
+
+function apriNuovoClienteDaOrdine() { _dopoCliente='ordine'; apriFormCliente(null); }
+
+async function salvaCliente() {
+  const nome=document.getElementById('cf-nome').value.trim();
+  if (!nome) { showErr('cf-err','Il nome è obbligatorio'); return; }
+  const tipo=document.getElementById('cf-tipo').value;
+  const data={
+    nome, cognome:document.getElementById('cf-cognome').value.trim()||null,
+    telefono:document.getElementById('cf-tel').value.trim()||null,
+    email:document.getElementById('cf-email').value.trim()||null,
+    note:document.getElementById('cf-note').value.trim()||null,
+    tipo_cliente:tipo,
+    classe:tipo==='medie'?document.getElementById('cf-classe').value||null:null,
+    scuola:(tipo==='medie'||tipo==='superiori')?document.getElementById('cf-scuola').value.trim()||null:null,
+  };
+  load(true);
+  const id=document.getElementById('cf-id').value;
+  if (id) { await sb.from('clienti').update(data).eq('id',id); }
+  else    { await sb.from('clienti').insert(data); }
+  load(false);
+  if (_dopoCliente==='ordine') await apriNuovoOrdine(); else navTo('clienti');
+}
+
+function annullaFormCliente() {
+  if (_dopoCliente==='ordine') apriNuovoOrdine(); else navTo('clienti');
+}
+
+// ══════════════════════════════════════════════════════
+//  UTILITY
+// ══════════════════════════════════════════════════════
+const thS='padding:.6rem 1rem;text-align:left;font-size:.72rem;font-weight:700;color:#718096;text-transform:uppercase;border-bottom:2px solid #e2e8f0;white-space:nowrap';
+const tdS='padding:.65rem 1rem;border-bottom:1px solid #f0f0f0;font-size:.875rem';
+
+function fmt(n)     { return (parseFloat(n)||0).toFixed(2); }
+function today()    { return new Date().toISOString().split('T')[0]; }
+function fmtDate(d) { if(!d) return '—'; const [y,m,g]=d.split('-'); return `${g}/${m}/${y}`; }
+function nomeC(c)   { if(!c) return '—'; return [c.nome,c.cognome].filter(Boolean).join(' '); }
+function labelTipo(t){ return {acconto:'Acconto',parziale:'Pagamento parziale',saldo:'Saldo finale'}[t]||t; }
+
+function badgeOrdine(s) {
+  const m={confermato:['b-blue','Confermato'],parz_disponibile:['b-yellow','Parz. disponibile'],parz_consegnato:['b-orange','Parz. consegnato'],consegnato:['b-orange','Consegnato'],saldato:['b-green','Saldato'],annullato:['b-gray','Annullato']};
+  const [cls,lbl]=m[s]||['b-gray',s];
+  return `<span class="badge ${cls}">${lbl}</span>`;
+}
+function badgeForn(s) {
+  const m={inviato:['b-blue','Inviato'],parz_arrivato:['b-orange','Parz. arrivato'],arrivato:['b-green','Arrivato'],annullato:['b-gray','Annullato']};
+  const [cls,lbl]=m[s]||['b-gray',s];
+  return `<span class="badge ${cls}">${lbl}</span>`;
+}
+
+function load(v)   { document.getElementById('loading').style.display=v?'flex':'none'; }
+function show(id)  { document.getElementById(id).style.display='block'; }
+function hide(id)  { document.getElementById(id).style.display='none'; }
+function hideEl(id){ document.getElementById(id).style.display='none'; }
+function showErr(id,msg){ const el=document.getElementById(id); el.textContent=msg; el.style.display='block'; }
+
+boot();
+</script>
+</body>
+</html>
