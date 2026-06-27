@@ -884,12 +884,11 @@ async function onClienteSelezionato() {
   const box = document.getElementById('libri-classe-box');
 
   if (classe) {
-    document.getElementById('libri-classe-label').textContent = `Classe ${classe} — Sec. I Grado Arce`;
+    document.getElementById('libri-classe-label').textContent = classe;
     load(true);
     const { data } = await sb.from('catalogo_libri')
       .select('*')
       .contains('classi', [classe])
-      .eq('tipo_scuola', 'medie')
       .neq('da_acquistare', false)
       .order('sort_order', { ascending: true, nullsFirst: false });
     load(false);
