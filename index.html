@@ -489,6 +489,10 @@
         <div class="form-group"><label>Classi (separate da virgola)</label><input type="text" id="lf-classi" placeholder="es. 1A, 1B, 2A"></div>
         <div class="form-group"><label>Materia</label><input type="text" id="lf-materia"></div>
         <div class="form-group"><label>Volume</label><input type="text" id="lf-volume" placeholder="es. 1 oppure A-B-C" autocomplete="off"></div>
+        <div class="form-group" style="align-items:center;display:flex;gap:.75rem">
+          <input type="checkbox" id="lf-da-acq" checked style="width:auto">
+          <label for="lf-da-acq" style="font-weight:600;margin:0">Da acquistare (deseleziona se "NO" nel PDF)</label>
+        </div>
         <div id="lf-err" class="alert alert-error" style="display:none"></div>
         <div class="flex flex-end mt-2">
           <button class="btn btn-secondary" onclick="navTo('catalogo')">Annulla</button>
@@ -831,6 +835,7 @@ async function onClienteSelezionato() {
       .select('*')
       .contains('classi', [classe])
       .eq('tipo_scuola', 'medie')
+      .eq('da_acquistare', true)
       .order('sort_order', { ascending: true, nullsFirst: false });
     load(false);
     if (!(data||[]).length) { box.style.display = 'none'; return; }
@@ -1242,6 +1247,7 @@ async function scanIsbnArrivo(isbn) {
 // ── Form libro catalogo ────────────────────────────────
 async function apriFormLibroCatalogo(id) {
   ['lf-id','lf-isbn','lf-titolo','lf-autore','lf-editore','lf-scuola','lf-anno','lf-classi','lf-materia','lf-volume'].forEach(f=>document.getElementById(f).value='');
+  document.getElementById('lf-da-acq').checked = true;
   document.getElementById('lf-tipo').value='';
   document.getElementById('lf-anno').value='2026/2027';
   document.getElementById('lf-prezzo').value='';
@@ -1260,6 +1266,7 @@ async function apriFormLibroCatalogo(id) {
     document.getElementById('lf-classi').value  = (b.classi||[]).join(', ');
     document.getElementById('lf-materia').value = b.materia||'';
     document.getElementById('lf-volume').value  = b.volume||'';
+    document.getElementById('lf-da-acq').checked = b.da_acquistare !== false;
   }
   hideEl('lf-err');
   activatePage('libro-form','catalogo');
@@ -1282,6 +1289,7 @@ async function salvaLibroCatalogo() {
     classi:   classi.length?classi:null,
     materia:  document.getElementById('lf-materia').value.trim()||null,
     volume:   document.getElementById('lf-volume').value.trim()||null,
+    da_acquistare: document.getElementById('lf-da-acq').checked,
   };
   load(true);
   const id = document.getElementById('lf-id').value;
