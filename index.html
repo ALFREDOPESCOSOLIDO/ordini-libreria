@@ -1570,34 +1570,38 @@ function renderDetOrdForn() {
 async function stampaPdfOrdForn() {
   const id = _ordFornitoreId;
   if (!id) { alert('Nessun ordine aperto'); return; }
+  load(true);
 
-  // Usa la cache già arricchita da aprireOrdForn
-  const of = _ordFornitoreCache?.of;
-  let righeArricchite = _ordFornitoreCache?.righe || [];
+  // Step 1: righe ordine fornitore
+  const {data:of} = await sb.from('ordini_fornitore').select('*').eq('id',id).single();
+  const {data:righe} = await sb.from('righe_ordine_fornitore').select('*').eq('ordine_fornitore_id',id);
 
-  // Se la cache è vuota (caso improbabile) ricarica
-  if (!righeArricchite.length) {
-    load(true);
-    const {data:righe} = await sb.from('righe_ordine_fornitore').select('*').eq('ordine_fornitore_id',id);
-    // Recupera dati da righe_ordine con query separate
-    const rigaIds = (righe||[]).map(r=>r.riga_ordine_id).filter(Boolean);
-    let roMap = {};
-    if (rigaIds.length) {
-      const {data:ros} = await sb.from('righe_ordine').select('id,autore,editore,prezzo,ordine_id').in('id', rigaIds);
-      const ordineIds = [...new Set((ros||[]).map(r=>r.ordine_id).filter(Boolean))];
-      let clientiOrdMap = {};
-      if (ordineIds.length) {
-        const {data:ords} = await sb.from('ordini').select('id,clienti(nome,cognome)').in('id', ordineIds);
-        (ords||[]).forEach(o => { clientiOrdMap[o.id] = o.clienti; });
-      }
-      (ros||[]).forEach(ro => { roMap[ro.id] = {...ro, _cliente: clientiOrdMap[ro.ordine_id]||null}; });
-    }
-    righeArricchite = (righe||[]).map(r => {
-      const ro = roMap[r.riga_ordine_id]||{};
-      return { ...r, autore: ro.autore||'', editore: ro.editore||'', prezzo: ro.prezzo||0, _cliente: ro._cliente||null };
-    });
-    load(false);
+  // Step 2: dati da righe_ordine (autore, editore, prezzo, ordine_id)
+  const rigaIds = (righe||[]).map(r=>r.riga_ordine_id).filter(Boolean);
+  let roMap = {};
+  if (rigaIds.length) {
+    const {data:ros} = await sb.from('righe_ordine').select('id,autore,editore,prezzo,ordine_id').in('id', rigaIds);
+    (ros||[]).forEach(ro => { roMap[ro.id] = ro; });
   }
+
+  // Step 3: clienti da ordini
+  const ordineIds = [...new Set(Object.values(roMap).map(r=>r.ordine_id).filter(Boolean))];
+  let clienteMap = {};
+  if (ordineIds.length) {
+    const {data:ords} = await sb.from('ordini').select('id,cliente_id').in('id', ordineIds);
+    const clienteIds = [...new Set((ords||[]).map(o=>o.cliente_id).filter(Boolean))];
+    if (clienteIds.length) {
+      const {data:cls} = await sb.from('clienti').select('id,nome,cognome').in('id', clienteIds);
+      const clMap = {}; (cls||[]).forEach(c => { clMap[c.id]=c; });
+      (ords||[]).forEach(o => { clienteMap[o.id] = clMap[o.cliente_id]||null; });
+    }
+  }
+
+  const righeArricchite = (righe||[]).map(r => {
+    const ro = roMap[r.riga_ordine_id] || {};
+    return { ...r, autore: ro.autore||'', editore: ro.editore||'', prezzo: ro.prezzo||0, _cliente: clienteMap[ro.ordine_id]||null };
+  });
+  load(false);
 
   // Raggruppa per ISBN: somma quantità e raccoglie clienti
   const gruppi = {};
