@@ -181,6 +181,7 @@
 
   <nav class="sidebar">
     <div class="sidebar-title">📚 Ordini Libreria</div>
+    <div style="font-size:10px;color:#aaa;padding:2px 8px">v13</div>
     <div class="sidebar-section">Clienti</div>
     <a id="nav-dashboard" onclick="navTo('dashboard')">🏠 Dashboard</a>
     <a id="nav-ordini"    onclick="navTo('ordini')">📋 Ordini clienti</a>
@@ -2183,12 +2184,17 @@ function cercaLibroCarico(isbn) {
 
 async function _caricaRigheIsbn(isbn) {
   load(true);
-  // Step 1: righe ordine fornitore per ISBN
-  // prova prima senza filtro isbn per vedere quante righe ci sono in totale
-  const { data: tutteRighe } = await sb.from('righe_ordine_fornitore').select('id,isbn').limit(3);
-  const { data: righe, error: eRighe } = await sb.from('righe_ordine_fornitore')
-    .select('*').eq('isbn', isbn).order('created_at');
-  alert('Totale sample:'+tutteRighe?.length+' isbn[0]:'+tutteRighe?.[0]?.isbn+'\nFiltro isbn='+isbn+' → '+righe?.length+' righe\nErr:'+(eRighe?.message||'ok'));
+  // Step 1: prendi tutti gli ordini fornitore (RLS li permette), poi filtra righe per isbn
+  const { data: ofs } = await sb.from('ordini_fornitore').select('id');
+  const ofIds = (ofs||[]).map(o=>o.id);
+  if (!ofIds.length) {
+    load(false);
+    document.getElementById('cm-risultato').style.display = 'none';
+    alert('Nessun ordine fornitore presente.');
+    return;
+  }
+  const { data: righe } = await sb.from('righe_ordine_fornitore')
+    .select('*').in('ordine_fornitore_id', ofIds).eq('isbn', isbn).order('created_at');
 
   if (!(righe||[]).length) {
     load(false);
