@@ -1571,6 +1571,10 @@ async function stampaPdfOrdForn() {
   try {
   const id = _ordFornitoreId;
   if (!id) { alert('Nessun ordine aperto'); return; }
+  // Apri finestra SUBITO (sincrono) prima degli await, altrimenti il browser la blocca
+  const w = window.open('', '_blank');
+  if (!w) { alert('Abilita i popup per questo sito nelle impostazioni del browser'); return; }
+  w.document.write('<html><body style="font-family:Arial;padding:2rem">⏳ Caricamento dati ordine...</body></html>');
   load(true);
 
   // Step 1: righe ordine fornitore
@@ -1582,8 +1586,7 @@ async function stampaPdfOrdForn() {
   const rigaIds = (righe||[]).map(r=>r.riga_ordine_id).filter(Boolean);
   let roMap = {};
   if (rigaIds.length) {
-    const {data:ros, error:eRos} = await sb.from('righe_ordine').select('id,autore,editore,prezzo_unitario,ordine_id').in('id', rigaIds);
-    alert('Step2 — rigaIds:'+rigaIds.length+' ros:'+( ros?.length??'null')+' err:'+(eRos?.message||'ok')+'\npr0:'+JSON.stringify(ros?.[0]||{}));
+    const {data:ros} = await sb.from('righe_ordine').select('id,autore,editore,prezzo_unitario,ordine_id').in('id', rigaIds);
     (ros||[]).forEach(ro => { roMap[ro.id] = ro; });
   }
 
@@ -1668,16 +1671,10 @@ async function stampaPdfOrdForn() {
   </table>
   </body></html>`;
 
-  // Usa iframe nascosto per evitare blocco popup
-  let iframe = document.getElementById('_print-iframe');
-  if (!iframe) {
-    iframe = document.createElement('iframe');
-    iframe.id = '_print-iframe';
-    iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:0';
-    document.body.appendChild(iframe);
-  }
-  iframe.onload = () => { iframe.contentWindow.focus(); iframe.contentWindow.print(); };
-  iframe.srcdoc = html;
+  load(false);
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
   } catch(e) { load(false); alert('Errore stampa: ' + e.message); }
 }
 
