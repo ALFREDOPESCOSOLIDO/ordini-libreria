@@ -1452,15 +1452,21 @@ async function salvaOrdForn() {
 
 async function aprireOrdForn(id) {
   _ordFornitoreId=id; load(true);
-  const [{data:of},{data:righe},{data:arrivi}]=await Promise.all([
-    sb.from('ordini_fornitore').select('*').eq('id',id).single(),
-    sb.from('righe_ordine_fornitore').select('*,righe_ordine(ordine_id,ordini(clienti(nome,cognome)))').eq('ordine_fornitore_id',id).order('created_at'),
-    sb.from('arrivi_fornitore').select('*,righe_arrivo(quantita,riga_ordine_fornitore_id)').eq('ordine_fornitore_id',id).order('data'),
-  ]);
-  load(false);
-  _ordFornitoreCache={of,righe,arrivi};
-  renderDetOrdForn();
-  activatePage('ord-forn-det','ord-forn');
+  try {
+    const [{data:of,error:e1},{data:righe,error:e2},{data:arrivi,error:e3}]=await Promise.all([
+      sb.from('ordini_fornitore').select('*').eq('id',id).single(),
+      sb.from('righe_ordine_fornitore').select('*,righe_ordine(ordine_id,ordini(clienti(nome,cognome)))').eq('ordine_fornitore_id',id).order('created_at'),
+      sb.from('arrivi_fornitore').select('*,righe_arrivo(quantita,riga_ordine_fornitore_id)').eq('ordine_fornitore_id',id).order('data'),
+    ]);
+    if (e1||e2||e3) throw new Error((e1||e2||e3).message);
+    load(false);
+    _ordFornitoreCache={of,righe:righe||[],arrivi:arrivi||[]};
+    renderDetOrdForn();
+    activatePage('ord-forn-det','ord-forn');
+  } catch(e) {
+    load(false);
+    alert('Errore apertura ordine: '+e.message);
+  }
 }
 
 function renderDetOrdForn() {
