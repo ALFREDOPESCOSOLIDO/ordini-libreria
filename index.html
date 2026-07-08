@@ -816,7 +816,14 @@ let _catTimer = null;
 // ══════════════════════════════════════════════════════
 //  SETUP / AUTH
 // ══════════════════════════════════════════════════════
-function getCfg() { return { url: localStorage.getItem('sb_url'), key: localStorage.getItem('sb_key') }; }
+const _DEFAULT_URL = 'https://pzfgidqtxpnghkihwepd.supabase.co';
+const _DEFAULT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6ZmdpZHF0eHBuZ2hraWh3ZXBkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0MjUwNzIsImV4cCI6MjA5ODAwMTA3Mn0.uqwVWngmVdsQyrEF-BKpETA5o8xyMbza8I5lzQWzv8E';
+
+function getCfg() {
+  const url = localStorage.getItem('sb_url') || _DEFAULT_URL;
+  const key = localStorage.getItem('sb_key') || _DEFAULT_KEY;
+  return { url, key };
+}
 function initSb(url, key) { sb = supabase.createClient(url, key); }
 function showSetup() { hide('screen-login'); hide('app'); show('screen-setup'); }
 function showLogin() { hide('screen-setup'); hide('app'); show('screen-login'); }
@@ -824,7 +831,6 @@ function showApp()  { hide('screen-setup'); hide('screen-login'); show('app'); }
 
 async function boot() {
   const { url, key } = getCfg();
-  if (!url || !key) { showSetup(); return; }
   initSb(url, key);
   const { data: { session } } = await sb.auth.getSession();
   if (!session) { showLogin(); return; }
