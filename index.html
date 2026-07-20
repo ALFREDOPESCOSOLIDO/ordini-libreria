@@ -2151,39 +2151,38 @@ async function caricaPdfAdozioni(file) {
     const buf = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
 
-    // Estrai items con coordinate (x da sinistra, y dall'alto)
-    let items = [];
+    // Funzione per raggruppare items in righe per pagina
+    function itemsToRows(pageItems) {
+      pageItems.sort((a, b) => a.y - b.y || a.x - b.x);
+      const rows = [];
+      for (const it of pageItems) {
+        const last = rows[rows.length - 1];
+        if (last && it.y - last.y <= 5) { last.items.push(it); }
+        else { rows.push({ y: it.y, items: [it] }); }
+      }
+      rows.forEach(r => r.items.sort((a, b) => a.x - b.x));
+      return rows;
+    }
+
+    // Estrai righe da tutte le pagine mantenendo contesto di pagina separato
+    const allPageRows = [];
     for (let p = 1; p <= pdf.numPages; p++) {
       const page = await pdf.getPage(p);
       const vp   = page.getViewport({ scale: 1 });
       const tc   = await page.getTextContent();
+      const pageItems = [];
       tc.items.forEach(it => {
         const str = it.str.trim();
         if (!str) return;
-        items.push({
-          str,
-          x: Math.round(it.transform[4]),
-          y: Math.round(vp.height - it.transform[5])  // flip: 0=alto
-        });
+        pageItems.push({ str, x: Math.round(it.transform[4]), y: Math.round(vp.height - it.transform[5]) });
       });
+      allPageRows.push(itemsToRows(pageItems));
     }
 
-    // Raggruppa per righe: ordina per Y e crea nuova riga quando il salto > 5pt
-    items.sort((a, b) => a.y - b.y || a.x - b.x);
-    const rows = [];
-    for (const it of items) {
-      const last = rows[rows.length - 1];
-      if (last && it.y - last.y <= 5) {
-        last.items.push(it);
-      } else {
-        rows.push({ y: it.y, items: [it] });
-      }
-    }
-    rows.forEach(r => r.items.sort((a, b) => a.x - b.x));
-
-    // ── Metadati (cerca riga per riga) ────────────────────
+    // Metadati dalla prima pagina
+    const rows0 = allPageRows[0] || [];
     let classe = '', corso = '', anno = '2026/2027', scuola = '';
-    for (const row of rows.slice(0, 35)) {
+    for (const row of rows0.slice(0, 35)) {
       const line = row.items.map(i => i.str).join(' ');
       if (!classe && /Classe:/i.test(line)) {
         const m = line.match(/Classe:\s*(\d+\s*\S+)/i) || line.match(/Classe:\s*(\S+)/i);
@@ -2197,8 +2196,7 @@ async function caricaPdfAdozioni(file) {
         if (m) anno = m[1].replace('-', '/');
       }
     }
-    // Scuola: prima riga significativa (tipicamente nome istituto in alto a sinistra)
-    scuola = rows.find(r =>
+    scuola = rows0.find(r =>
       r.items[0] && r.items[0].x < 300 &&
       !/^(FRPM|FRMM|FR[A-Z]|Data|Pag\.|Materia|Tipo|Classe|Corso|Anno|ELENCO|\d)/i.test(r.items[0].str) &&
       r.items[0].str.length > 3
@@ -2206,37 +2204,45 @@ async function caricaPdfAdozioni(file) {
 
     _pdfMeta = {
       classe: classe.replace(/\s+/g,'').toUpperCase(),
-      corso:  corso.split(/\s{2,}/)[0], // prendi solo prima parte
+      corso:  corso.split(/\s{2,}/)[0],
       anno, scuola
     };
 
-    // ── Trova header tabella ───────────────────────────────
-    const hIdx = rows.findIndex(r => r.items.some(i => /^Materia/i.test(i.str)));
-    if (hIdx < 0) throw new Error('Struttura tabella non trovata nel PDF.');
-
-    // Header può stare su 2 righe ("Nuova / Adoz." e "Da / Acq.")
-    // Leggi le prime 3 righe dopo hIdx per colonne di destra
-    const COL = {};
-    for (const row of rows.slice(hIdx, hIdx + 3)) {
-      for (const it of row.items) {
-        const s = it.str.toLowerCase();
-        if (/materia|disciplin/i.test(s))   COL.materia  = it.x;
-        if (/^codice/i.test(s))             COL.isbn     = it.x;
-        if (/^autore/i.test(s))             COL.autore   = it.x;
-        if (/^titolo/i.test(s))             COL.titolo   = it.x;
-        if (/^vol\.?$/i.test(s))            COL.volume   = it.x;
-        if (/^editore/i.test(s))            COL.editore  = it.x;
-        if (/^prezzo/i.test(s))             COL.prezzo   = it.x;
-        if (/^nuova$/i.test(s))             COL.nuova    = it.x;
-        if (/^adoz/i.test(s) && !COL.nuova) COL.nuova   = it.x;
-        if (/^da$/i.test(s))                COL.daX      = it.x;
-        if (/^acq/i.test(s))               COL.daacq    = it.x;
-        if (/^cons/i.test(s))              COL.cons     = it.x;
+    // Funzione che estrae COL (posizioni colonne) dall'header di una pagina
+    function findCOL(rows) {
+      const hIdx = rows.findIndex(r => r.items.some(i => /^Materia/i.test(i.str)));
+      if (hIdx < 0) return null;
+      const COL = {};
+      for (const row of rows.slice(hIdx, hIdx + 3)) {
+        for (const it of row.items) {
+          const s = it.str.toLowerCase();
+          if (/materia|disciplin/i.test(s))    COL.materia = it.x;
+          if (/^codice/i.test(s))              COL.isbn    = it.x;
+          if (/^autore/i.test(s))              COL.autore  = it.x;
+          if (/^titolo/i.test(s))              COL.titolo  = it.x;
+          if (/^vol\.?$/i.test(s))             COL.volume  = it.x;
+          if (/^editore/i.test(s))             COL.editore = it.x;
+          if (/^prezzo/i.test(s))              COL.prezzo  = it.x;
+          if (/^nuova$/i.test(s))              COL.nuova   = it.x;
+          if (/^adoz/i.test(s) && !COL.nuova)  COL.nuova  = it.x;
+          if (/^da$/i.test(s))                 COL.daX     = it.x;
+          if (/^acq/i.test(s))                 COL.daacq  = it.x;
+          if (/^cons/i.test(s))                COL.cons   = it.x;
+        }
       }
+      if (!COL.daacq && COL.daX) COL.daacq = COL.daX;
+      return { COL, hIdx };
     }
-    if (!COL.daacq && COL.daX) COL.daacq = COL.daX;
 
-    // Ordine colonne per assegnazione
+    // Estrai libri processando ogni pagina con il suo header
+    const ISBN_RE = /^97[89]\d{10}$/;
+    _pdfLibri = [];
+
+    // Usa COL dalla prima pagina (valido per tutte le pagine dello stesso PDF)
+    const firstHeader = findCOL(rows0);
+    if (!firstHeader) throw new Error('Struttura tabella non trovata nel PDF.');
+    const COL = firstHeader.COL;
+
     const colOrder = ['materia','isbn','autore','titolo','volume','editore','prezzo','nuova','daacq','cons']
       .filter(c => COL[c] !== undefined)
       .sort((a, b) => COL[a] - COL[b]);
@@ -2247,58 +2253,55 @@ async function caricaPdfAdozioni(file) {
       return best;
     }
 
-    // ── Estrai libri ───────────────────────────────────────
-    const ISBN_RE = /^97[89]\d{10}$/;
-    _pdfLibri = [];
+    // Da Acq. tramite posizione X colonna (robusto a font encoding "Mo"→"No")
+    function getDaAcq(rowItems) {
+      if (COL.daacq) {
+        // Cerca l'item più vicino alla colonna Da Acq.
+        const candidates = rowItems
+          .filter(i => Math.abs(i.x - COL.daacq) < 40)
+          .sort((a, b) => Math.abs(a.x - COL.daacq) - Math.abs(b.x - COL.daacq));
+        if (candidates.length) return /^(Si|Sì)$/i.test(candidates[0].str);
+      }
+      // Fallback: penultimo Si/No
+      const sinoes = rowItems.filter(i => /^(Si|No|Sì)$/i.test(i.str)).sort((a,b)=>a.x-b.x);
+      const s = sinoes.length >= 2 ? sinoes[sinoes.length-2].str : (sinoes[0]?.str||'No');
+      return /^(Si|Sì)$/i.test(s);
+    }
+
     let cur = null;
-    const dataStart = hIdx + 1;
+    for (const pageRows of allPageRows) {
+      const h = findCOL(pageRows);
+      const dataStart = h ? h.hIdx + 1 : 0;
+      for (let ri = dataStart; ri < pageRows.length; ri++) {
+        const row = pageRows[ri];
+        const line = row.items.map(i => i.str).join(' ');
+        if (/^(Data aggiornamento|Pag\.|ELENCO DEI|Materia)/i.test(line)) continue;
 
-    for (let ri = dataStart; ri < rows.length; ri++) {
-      const row = rows[ri];
-      const line = row.items.map(i => i.str).join(' ');
-      if (/^(Data aggiornamento|Pag\.|ELENCO DEI)/i.test(line)) continue;
-
-      // Cerca ISBN nella riga
-      const isbnIt = row.items.find(i => ISBN_RE.test(i.str));
-
-      if (isbnIt) {
-        if (cur) _pdfLibri.push(cur);
-
-        // Mappa items → colonne
-        const cells = {};
-        for (const it of row.items) {
-          const col = assignCol(it.x);
-          cells[col] = (cells[col] ? cells[col] + ' ' : '') + it.str;
-        }
-
-        // Da Acq.: trova i Si/No nella riga ordinati per X
-        // La struttura è sempre: [...] Nuova_Adoz Da_Acq Cons
-        // → prendo il penultimo Si/No (Da Acq.)
-        const sinoes = row.items
-          .filter(i => /^(Si|No|Sì)$/i.test(i.str))
-          .sort((a, b) => a.x - b.x);
-        // Se ci sono 3 → [NuovaAdoz, DaAcq, Cons]; 2 → [DaAcq, Cons]; 1 → DaAcq
-        const daAcqStr = sinoes.length >= 2
-          ? sinoes[sinoes.length - 2].str
-          : (sinoes[0]?.str || 'No');
-
-        cur = {
-          materia: (cells.materia || '').trim(),
-          isbn:    isbnIt.str,
-          autore:  (cells.autore  || '').trim(),
-          titolo:  (cells.titolo  || '').trim(),
-          volume:  (cells.volume  || '').trim(),
-          editore: (cells.editore || '').trim(),
-          prezzo:  parseFloat((cells.prezzo||'0').replace(',','.')) || 0,
-          daacq:   /^(Si|Sì)$/i.test(daAcqStr),
-        };
-      } else if (cur) {
-        // Riga di continuazione: solo testo non Si/No
-        for (const it of row.items) {
-          if (/^(Si|No|Sì)$/i.test(it.str)) continue;
-          const col = assignCol(it.x);
-          if (col === 'titolo' || col === 'autore' || col === 'materia' || col === 'editore') {
-            cur[col] = (cur[col] + ' ' + it.str).trim();
+        const isbnIt = row.items.find(i => ISBN_RE.test(i.str));
+        if (isbnIt) {
+          if (cur) _pdfLibri.push(cur);
+          const cells = {};
+          for (const it of row.items) {
+            const col = assignCol(it.x);
+            cells[col] = (cells[col] ? cells[col] + ' ' : '') + it.str;
+          }
+          cur = {
+            materia: (cells.materia || '').trim(),
+            isbn:    isbnIt.str,
+            autore:  (cells.autore  || '').trim(),
+            titolo:  (cells.titolo  || '').trim(),
+            volume:  (cells.volume  || '').trim(),
+            editore: (cells.editore || '').trim(),
+            prezzo:  parseFloat((cells.prezzo||'0').replace(',','.')) || 0,
+            daacq:   getDaAcq(row.items),
+          };
+        } else if (cur) {
+          for (const it of row.items) {
+            if (/^(Si|No|Sì)$/i.test(it.str)) continue;
+            const col = assignCol(it.x);
+            if (['titolo','autore','materia','editore'].includes(col)) {
+              cur[col] = (cur[col] + ' ' + it.str).trim();
+            }
           }
         }
       }
