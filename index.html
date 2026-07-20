@@ -830,11 +830,20 @@ function showLogin() { hide('screen-setup'); hide('app'); show('screen-login'); 
 function showApp()  { hide('screen-setup'); hide('screen-login'); show('app'); }
 
 async function boot() {
-  const { url, key } = getCfg();
-  initSb(url, key);
-  const { data: { session } } = await sb.auth.getSession();
-  if (!session) { showLogin(); return; }
-  showApp(); navTo('dashboard');
+  try {
+    // Pulisce eventuali credenziali vecchie salvate che non corrispondono al progetto corrente
+    const savedUrl = localStorage.getItem('sb_url');
+    if (savedUrl && savedUrl !== _DEFAULT_URL) {
+      localStorage.removeItem('sb_url'); localStorage.removeItem('sb_key');
+    }
+    const { url, key } = getCfg();
+    initSb(url, key);
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { showLogin(); return; }
+    showApp(); navTo('dashboard');
+  } catch(e) {
+    showLogin();
+  }
 }
 
 async function saveSetup() {
