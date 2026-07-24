@@ -262,6 +262,9 @@
         </div>
       </div>
 
+      <!-- Debug panel -->
+      <div id="debug-classe-box" style="display:none;background:#fff8e1;border:1px solid #f6c90e;border-radius:8px;padding:1rem;margin-bottom:1rem;font-size:.8rem;font-family:monospace;white-space:pre-wrap;word-break:break-all"></div>
+
       <!-- Libri classe (appare solo per clienti medie) -->
       <div id="libri-classe-box" class="section-card" style="display:none;background:#f0fff4;border:1px solid #9ae6b4">
         <div class="header-bar" style="margin-bottom:.75rem">
@@ -1003,7 +1006,15 @@ async function onClienteSelezionato() {
       })
     );
     load(false);
-    if (!(data||[]).length) { box.style.display = 'none'; return; }
+    if (!(data||[]).length) {
+      box.style.display = 'none';
+      const allClassi = [...new Set((tuttiLibri||[]).flatMap(b=>b.classi||[]))].sort();
+      const dbg = document.getElementById('debug-classe-box');
+      dbg.style.display = 'block';
+      dbg.textContent = `CLASSE CLIENTE: "${classe}"\nCLASSE BREVE: "${classeBreve}"\nTOT LIBRI CATALOGO: ${(tuttiLibri||[]).length}\nTUTTE LE CLASSI NEL CATALOGO (${allClassi.length}):\n${allClassi.map((c,i)=>`  [${i}] "${c}"`).join('\n')}`;
+      return;
+    }
+    document.getElementById('debug-classe-box').style.display = 'none';
     document.getElementById('libri-classe-list').innerHTML = (data||[]).map(b => `
       <div style="display:flex;align-items:center;gap:.75rem;padding:.45rem 0;border-bottom:1px solid #c6f6d5;font-size:.875rem">
         <input type="checkbox" id="lc-${b.id}" data-libro='${JSON.stringify(b).replace(/'/g,"&#39;")}' checked style="width:auto;flex-shrink:0">
