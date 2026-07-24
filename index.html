@@ -2200,11 +2200,13 @@ async function caricaPdfAdozioni(file) {
         if (m) anno = m[1].replace('-', '/');
       }
     }
-    scuola = rows0.find(r =>
+    const scuolaRow = rows0.find(r =>
       r.items[0] && r.items[0].x < 300 &&
       !/^(FRPM|FRMM|FR[A-Z]|Data|Pag\.|Materia|Tipo|Classe|Corso|Anno|ELENCO|\d)/i.test(r.items[0].str) &&
       r.items[0].str.length > 3
-    )?.items[0]?.str || '';
+    );
+    // Unisce tutti gli item della riga per catturare nomi come: ISTITUTO "GIOBERTI" SORA
+    scuola = scuolaRow ? scuolaRow.items.map(i => i.str).join(' ').trim() : '';
 
     _pdfMeta = {
       classe: classe.replace(/\s+/g,'').toUpperCase(),
