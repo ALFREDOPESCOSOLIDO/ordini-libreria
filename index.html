@@ -809,6 +809,7 @@
 // ══════════════════════════════════════════════════════
 let sb = null;
 let _ordineId = null, _ordineCache = null;
+let _clientiMap = {}; // id → {tipo_cliente, classe}
 let _ordFornitoreId = null, _ordFornitoreCache = null;
 let _dopoCliente = null;
 let _catTimer = null;
@@ -970,17 +971,20 @@ async function apriNuovoOrdine() {
   document.getElementById('libri-list').innerHTML = '';
   aggRiepilogo();
   const { data: clienti } = await sb.from('clienti').select('id,nome,cognome,tipo_cliente,classe').order('nome');
+  _clientiMap = {};
+  (clienti||[]).forEach(c => { _clientiMap[c.id] = { tipo: c.tipo_cliente||'privato', classe: c.classe||'' }; });
   const sel = document.getElementById('n-cliente');
   sel.innerHTML = '<option value="">— seleziona cliente —</option>' +
-    (clienti||[]).map(c=>`<option value="${c.id}" data-tipo="${c.tipo_cliente||'privato'}" data-classe="${(c.classe||'').replace(/"/g,'&quot;')}">${nomeC(c)}${c.classe?' ('+c.classe+')':''}</option>`).join('');
+    (clienti||[]).map(c=>`<option value="${c.id}">${nomeC(c)}${c.classe?' ('+c.classe+')':''}</option>`).join('');
   activatePage('ordine-nuovo','ordini');
 }
 
 async function onClienteSelezionato() {
   const sel = document.getElementById('n-cliente');
-  const opt = sel.options[sel.selectedIndex];
-  const tipo  = opt?.dataset?.tipo || '';
-  const classe = opt?.dataset?.classe || '';
+  const clienteId = sel.value;
+  const info = _clientiMap[clienteId] || {};
+  const tipo   = info.tipo || '';
+  const classe = info.classe || '';
   const box = document.getElementById('libri-classe-box');
 
   if (classe) {
@@ -998,9 +1002,6 @@ async function onClienteSelezionato() {
         .contains('classi', [classeBreve])
         .order('sort_order', { ascending: true, nullsFirst: false }));
     }
-    // Debug temporaneo
-    const { data: tuttiLibri } = await sb.from('catalogo_libri').select('isbn,classi').limit(5);
-    alert('Classe cercata: "' + classe + '"\nBreve: "' + classeBreve + '"\nLibri trovati: ' + (data||[]).length + '\nPrimi 5 classi in catalogo:\n' + (tuttiLibri||[]).map(b=>b.isbn+': '+(b.classi||[]).join(', ')).join('\n'));
     load(false);
     if (!(data||[]).length) { box.style.display = 'none'; return; }
     document.getElementById('libri-classe-list').innerHTML = (data||[]).map(b => `
