@@ -991,17 +991,17 @@ async function onClienteSelezionato() {
     document.getElementById('libri-classe-label').textContent = classe;
     load(true);
     const classeBreve = classe.includes(' — ') ? classe.split(' — ').pop().trim() : classe;
-    // Cerca tutti i libri con questa classe nel catalogo
-    let { data, error: err1 } = await sb.from('catalogo_libri')
-      .select('*')
-      .contains('classi', [classe])
-      .order('sort_order', { ascending: true, nullsFirst: false });
-    if (!(data||[]).length && classeBreve !== classe) {
-      ({ data } = await sb.from('catalogo_libri')
-        .select('*')
-        .contains('classi', [classeBreve])
-        .order('sort_order', { ascending: true, nullsFirst: false }));
-    }
+    // Scarica tutto il catalogo e filtra in JS per gestire variazioni di spazi/virgolette
+    const { data: tuttiLibri } = await sb.from('catalogo_libri').select('*').order('sort_order', { ascending: true, nullsFirst: false });
+    const normalizza = s => (s||'').replace(/\s+/g,' ').replace(/["""]/g,'"').trim();
+    const classeN = normalizza(classe);
+    const classeBreveN = normalizza(classeBreve);
+    let data = (tuttiLibri||[]).filter(b =>
+      (b.classi||[]).some(c => {
+        const cn = normalizza(c);
+        return cn === classeN || cn === classeBreveN || cn.endsWith(' — ' + classeBreveN) || cn.endsWith(' - ' + classeBreveN);
+      })
+    );
     load(false);
     if (!(data||[]).length) { box.style.display = 'none'; return; }
     document.getElementById('libri-classe-list').innerHTML = (data||[]).map(b => `
