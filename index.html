@@ -972,7 +972,7 @@ async function apriNuovoOrdine() {
   const { data: clienti } = await sb.from('clienti').select('id,nome,cognome,tipo_cliente,classe').order('nome');
   const sel = document.getElementById('n-cliente');
   sel.innerHTML = '<option value="">— seleziona cliente —</option>' +
-    (clienti||[]).map(c=>`<option value="${c.id}" data-tipo="${c.tipo_cliente||'privato'}" data-classe="${c.classe||''}">${nomeC(c)}${c.classe?' ('+c.classe+')':''}</option>`).join('');
+    (clienti||[]).map(c=>`<option value="${c.id}" data-tipo="${c.tipo_cliente||'privato'}" data-classe="${(c.classe||'').replace(/"/g,'&quot;')}">${nomeC(c)}${c.classe?' ('+c.classe+')':''}</option>`).join('');
   activatePage('ordine-nuovo','ordini');
 }
 
