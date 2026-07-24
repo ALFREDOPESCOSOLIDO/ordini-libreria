@@ -986,8 +986,8 @@ async function onClienteSelezionato() {
   if (classe) {
     document.getElementById('libri-classe-label').textContent = classe;
     load(true);
-    // Cerca sia per chiave completa ("SCUOLA — CLASSE") che per codice breve ("CLASSE")
     const classeBreve = classe.includes(' — ') ? classe.split(' — ').pop().trim() : classe;
+    // Cerca tutti i libri con questa classe nel catalogo
     let { data, error: err1 } = await sb.from('catalogo_libri')
       .select('*')
       .contains('classi', [classe])
@@ -998,6 +998,9 @@ async function onClienteSelezionato() {
         .contains('classi', [classeBreve])
         .order('sort_order', { ascending: true, nullsFirst: false }));
     }
+    // Debug temporaneo
+    const { data: tuttiLibri } = await sb.from('catalogo_libri').select('isbn,classi').limit(5);
+    alert('Classe cercata: "' + classe + '"\nBreve: "' + classeBreve + '"\nLibri trovati: ' + (data||[]).length + '\nPrimi 5 classi in catalogo:\n' + (tuttiLibri||[]).map(b=>b.isbn+': '+(b.classi||[]).join(', ')).join('\n'));
     load(false);
     if (!(data||[]).length) { box.style.display = 'none'; return; }
     document.getElementById('libri-classe-list').innerHTML = (data||[]).map(b => `
