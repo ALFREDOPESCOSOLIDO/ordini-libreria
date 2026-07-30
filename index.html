@@ -192,7 +192,9 @@
     <div class="sidebar-section">Fornitori</div>
     <a id="nav-fornitori" onclick="navTo('fornitori')">🏢 Fornitori</a>
     <a id="nav-ord-forn"  onclick="navTo('ord-forn')">🏭 Ordini fornitore</a>
-    <a id="nav-carico-merce" onclick="navTo('carico-merce')">📦 Carico merce</a>
+    <a id="nav-carico-merce"  onclick="navTo('carico-merce')">📦 Carico merce</a>
+    <a id="nav-elenco-carichi" onclick="navTo('elenco-carichi')">📋 Elenco carichi</a>
+    <a id="nav-cerca-isbn"  onclick="navTo('cerca-isbn')">🔍 Cerca ISBN</a>
     <div class="sidebar-spacer"></div>
     <div class="sidebar-bottom">
       <a onclick="doLogout()" style="color:rgba(255,255,255,.45);font-size:.85rem">🚪 Esci</a>
@@ -807,6 +809,29 @@
       </div>
     </div>
 
+    <!-- ══ ELENCO CARICHI ══════════════════════════════════ -->
+    <div id="page-elenco-carichi" class="page">
+      <div class="header-bar">
+        <div class="page-title">📋 Elenco carichi ricevuti</div>
+        <button class="btn btn-secondary" onclick="loadElencoCarichi()">🔄 Aggiorna</button>
+      </div>
+      <div id="elenco-carichi-body"></div>
+    </div>
+
+    <!-- ══ CERCA ISBN ══════════════════════════════════════ -->
+    <div id="page-cerca-isbn" class="page">
+      <div class="header-bar">
+        <div class="page-title">🔍 Cerca ISBN</div>
+      </div>
+      <div class="section-card">
+        <div class="form-group" style="margin-bottom:0">
+          <label>ISBN (scansiona barcode o digita)</label>
+          <input type="text" id="ci-isbn" placeholder="9788826822211…" oninput="cercaIsbnCompleto(this.value)" autocomplete="off" style="font-size:1.1rem">
+        </div>
+      </div>
+      <div id="ci-risultato"></div>
+    </div>
+
   </main>
 </div>
 </div>
@@ -886,7 +911,7 @@ function navTo(name) {
   if (pg)  pg.classList.add('active');
   if (nav) nav.classList.add('active');
   if (name === 'importa-pdf') resetImportaPdf();
-  const loaders = { dashboard: loadDashboard, ordini: loadOrdini, clienti: loadClienti, 'ord-forn': loadOrdForn, catalogo: loadCatalogo, fornitori: loadFornitori };
+  const loaders = { dashboard: loadDashboard, ordini: loadOrdini, clienti: loadClienti, 'ord-forn': loadOrdForn, catalogo: loadCatalogo, fornitori: loadFornitori, 'elenco-carichi': loadElencoCarichi };
   if (loaders[name]) loaders[name]();
 }
 
@@ -2612,6 +2637,183 @@ async function registraCarico() {
   // Ricarica la tabella per aggiornare i conteggi
   const isbn = document.getElementById('cm-isbn').value.trim();
   await _caricaRigheIsbn(isbn);
+}
+
+// ── Elenco carichi ricevuti ───────────────────────────
+async function loadElencoCarichi() {
+  const el = document.getElementById('elenco-carichi-body');
+  el.innerHTML = '<div class="text-muted text-sm" style="padding:1rem">Caricamento…</div>';
+  load(true);
+
+  const { data: ofs } = await sb.from('ordini_fornitore').select('id,data_ordine,fornitore,fornitore_id,fornitori(nome)').order('data_ordine', { ascending: false });
+  const ofIds = (ofs||[]).map(o => o.id);
+  if (!ofIds.length) { el.innerHTML = '<div class="section-card text-muted">Nessun ordine fornitore presente.</div>'; load(false); return; }
+
+  const { data: righe } = await sb.from('righe_ordine_fornitore').select('*').in('ordine_fornitore_id', ofIds).gt('quantita_arrivata', 0);
+  load(false);
+
+  if (!(righe||[]).length) { el.innerHTML = '<div class="section-card text-muted">Nessun carico registrato.</div>'; return; }
+
+  const ofMap = {}; (ofs||[]).forEach(o => { ofMap[o.id] = o; });
+  const gruppi = {};
+  (righe||[]).forEach(r => {
+    const k = r.ordine_fornitore_id;
+    if (!gruppi[k]) gruppi[k] = [];
+    gruppi[k].push(r);
+  });
+
+  const th = s => `<th style="padding:7px 8px;font-size:.75rem;text-align:${s==='c'?'center':'left'}">${arguments[1]||''}</th>`;
+  el.innerHTML = Object.entries(gruppi).map(([ofId, rr]) => {
+    const of = ofMap[ofId] || {};
+    const nomeF = of.fornitori?.nome || of.fornitore || '—';
+    const totOrd = rr.reduce((s,r) => s + r.quantita, 0);
+    const totArr = rr.reduce((s,r) => s + (r.quantita_arrivata||0), 0);
+    const rows = rr.map((r,i) => `<tr style="background:${i%2?'#f9fafb':'#fff'}">
+      <td style="padding:6px 8px;font-family:monospace;font-size:.78rem">${r.isbn||'—'}</td>
+      <td style="padding:6px 8px;font-size:.85rem">${r.titolo||'—'}</td>
+      <td style="padding:6px 8px;font-size:.85rem">${r.editore||'—'}</td>
+      <td style="padding:6px 8px;text-align:center">${r.quantita}</td>
+      <td style="padding:6px 8px;text-align:center;font-weight:700;color:#276749">${r.quantita_arrivata||0}</td>
+      <td style="padding:6px 8px;text-align:center;color:${r.quantita>(r.quantita_arrivata||0)?'#c53030':'#718096'}">${r.quantita-(r.quantita_arrivata||0)||'✓'}</td>
+    </tr>`).join('');
+    return `<div class="section-card" style="margin-bottom:1rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;flex-wrap:wrap;gap:.5rem">
+        <div><strong style="font-size:1rem">${nomeF}</strong>
+          <span class="text-muted text-sm" style="margin-left:.75rem">Ordine del ${fmtDate(of.data_ordine)}</span></div>
+        <div style="display:flex;gap:.75rem;font-size:.85rem">
+          <span style="background:#edf2f7;padding:.2rem .6rem;border-radius:5px"><strong>${totOrd}</strong> ord.</span>
+          <span style="background:#c6f6d5;padding:.2rem .6rem;border-radius:5px"><strong>${totArr}</strong> arr.</span>
+        </div>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#edf2f7">
+          <th style="padding:7px 8px;font-size:.75rem;text-align:left">ISBN</th>
+          <th style="padding:7px 8px;font-size:.75rem;text-align:left">Titolo</th>
+          <th style="padding:7px 8px;font-size:.75rem;text-align:left">Editore</th>
+          <th style="padding:7px 8px;font-size:.75rem;text-align:center">Ord.</th>
+          <th style="padding:7px 8px;font-size:.75rem;text-align:center;color:#276749">Arr.</th>
+          <th style="padding:7px 8px;font-size:.75rem;text-align:center;color:#c53030">Manc.</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }).join('');
+}
+
+// ── Cerca ISBN — storia completa ──────────────────────
+let _ciTimer = null;
+function cercaIsbnCompleto(isbn) {
+  clearTimeout(_ciTimer);
+  isbn = (isbn||'').trim();
+  document.getElementById('ci-risultato').innerHTML = '';
+  if (isbn.length < 10) return;
+  _ciTimer = setTimeout(() => _caricaIsbnCompleto(isbn), 400);
+}
+
+async function _caricaIsbnCompleto(isbn) {
+  const el = document.getElementById('ci-risultato');
+  el.innerHTML = '<div class="text-muted text-sm" style="padding:.5rem 1rem">Ricerca…</div>';
+  load(true);
+
+  const [{ data: roAll }, { data: rof }, { data: catArr }] = await Promise.all([
+    sb.from('righe_ordine').select('id,titolo,autore,editore,prezzo,quantita,quantita_arrivata,quantita_consegnata,quantita_ordinata_fornitore,ordini(id,data_ordine,stato,clienti(nome,cognome,classe,scuola))').ilike('isbn', isbn),
+    sb.from('righe_ordine_fornitore').select('*').eq('isbn', isbn),
+    sb.from('catalogo_libri').select('titolo,autore,editore,prezzo').ilike('isbn', isbn).limit(1),
+  ]);
+  load(false);
+
+  const libro = catArr?.[0] || roAll?.[0] || {};
+  const titolo = libro.titolo || '—';
+  const autore = libro.autore || '';
+  const editore = libro.editore || '';
+
+  if (!(roAll||[]).length && !(rof||[]).length) {
+    el.innerHTML = `<div class="section-card"><p class="text-muted">Nessun ordine trovato per ISBN <strong>${isbn}</strong>.</p></div>`;
+    return;
+  }
+
+  // — Ordini clienti —
+  const totCliOrd = (roAll||[]).reduce((s,r) => s + r.quantita, 0);
+  const totCliCons = (roAll||[]).reduce((s,r) => s + (r.quantita_consegnata||0), 0);
+  const righeCliHtml = (roAll||[]).length ? `
+    <table style="width:100%;border-collapse:collapse;margin-top:.5rem">
+      <thead><tr style="background:#edf2f7">
+        <th style="padding:7px 8px;font-size:.75rem;text-align:left">Data ordine</th>
+        <th style="padding:7px 8px;font-size:.75rem;text-align:left">Cliente</th>
+        <th style="padding:7px 8px;font-size:.75rem;text-align:left">Classe</th>
+        <th style="padding:7px 8px;font-size:.75rem;text-align:center">Qtà</th>
+        <th style="padding:7px 8px;font-size:.75rem;text-align:center">Arrivati</th>
+        <th style="padding:7px 8px;font-size:.75rem;text-align:center">Cons.</th>
+        <th style="padding:7px 8px;font-size:.75rem;text-align:left">Stato</th>
+      </tr></thead>
+      <tbody>${(roAll||[]).map((r,i) => {
+        const c = r.ordini?.clienti;
+        const cons = r.quantita_consegnata||0;
+        const arr = r.quantita_arrivata||0;
+        return `<tr style="background:${i%2?'#f9fafb':'#fff'}">
+          <td style="padding:6px 8px;font-size:.85rem">${fmtDate(r.ordini?.data_ordine)}</td>
+          <td style="padding:6px 8px;font-size:.85rem;font-weight:600">${nomeC(c)||'—'}</td>
+          <td style="padding:6px 8px;font-size:.8rem;color:#718096">${c?.classe||'—'}</td>
+          <td style="padding:6px 8px;text-align:center">${r.quantita}</td>
+          <td style="padding:6px 8px;text-align:center">${arr}</td>
+          <td style="padding:6px 8px;text-align:center;font-weight:700;color:${cons>=r.quantita?'#276749':'#c53030'}">${cons}</td>
+          <td style="padding:6px 8px">${badgeOrdine(r.ordini?.stato)}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>` : '<p class="text-muted text-sm">Nessun ordine cliente.</p>';
+
+  // — Ordini fornitore —
+  const ofIds = [...new Set((rof||[]).map(r => r.ordine_fornitore_id).filter(Boolean))];
+  let ofMap = {};
+  if (ofIds.length) {
+    const { data: ofs } = await sb.from('ordini_fornitore').select('id,data_ordine,fornitore,fornitori(nome)').in('id', ofIds);
+    (ofs||[]).forEach(o => { ofMap[o.id] = o; });
+  }
+  const totFornOrd = (rof||[]).reduce((s,r) => s + r.quantita, 0);
+  const totFornArr = (rof||[]).reduce((s,r) => s + (r.quantita_arrivata||0), 0);
+  const righeFornHtml = (rof||[]).length ? `
+    <table style="width:100%;border-collapse:collapse;margin-top:.5rem">
+      <thead><tr style="background:#edf2f7">
+        <th style="padding:7px 8px;font-size:.75rem;text-align:left">Data ordine</th>
+        <th style="padding:7px 8px;font-size:.75rem;text-align:left">Fornitore</th>
+        <th style="padding:7px 8px;font-size:.75rem;text-align:center">Qtà ord.</th>
+        <th style="padding:7px 8px;font-size:.75rem;text-align:center;color:#276749">Arrivati</th>
+        <th style="padding:7px 8px;font-size:.75rem;text-align:center;color:#c53030">Mancanti</th>
+      </tr></thead>
+      <tbody>${(rof||[]).map((r,i) => {
+        const of = ofMap[r.ordine_fornitore_id] || {};
+        const nomeF = of.fornitori?.nome || of.fornitore || '—';
+        const manca = r.quantita - (r.quantita_arrivata||0);
+        return `<tr style="background:${i%2?'#f9fafb':'#fff'}">
+          <td style="padding:6px 8px;font-size:.85rem">${fmtDate(of.data_ordine)}</td>
+          <td style="padding:6px 8px;font-size:.85rem;font-weight:600">${nomeF}</td>
+          <td style="padding:6px 8px;text-align:center">${r.quantita}</td>
+          <td style="padding:6px 8px;text-align:center;font-weight:700;color:#276749">${r.quantita_arrivata||0}</td>
+          <td style="padding:6px 8px;text-align:center;font-weight:700;color:${manca>0?'#c53030':'#718096'}">${manca>0?manca:'✓'}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>` : '<p class="text-muted text-sm">Nessun ordine fornitore.</p>';
+
+  el.innerHTML = `
+    <div class="section-card" style="margin-bottom:1rem">
+      <strong style="font-size:1rem">${titolo}</strong>
+      <span class="text-muted text-sm" style="display:block">${autore}${editore?' · '+editore:''}</span>
+      <span style="font-family:monospace;font-size:.78rem;color:#718096">${isbn}</span>
+    </div>
+    <div class="section-card" style="margin-bottom:1rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.25rem">
+        <h3 style="margin:0">👥 Ordini clienti</h3>
+        <span class="text-muted text-sm">Tot. ${totCliOrd} ord. · ${totCliCons} cons.</span>
+      </div>
+      ${righeCliHtml}
+    </div>
+    <div class="section-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.25rem">
+        <h3 style="margin:0">🏭 Ordini fornitore</h3>
+        <span class="text-muted text-sm">Tot. ${totFornOrd} ord. · ${totFornArr} arr.</span>
+      </div>
+      ${righeFornHtml}
+    </div>`;
 }
 </script>
 </body>
