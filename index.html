@@ -2510,7 +2510,7 @@ async function _caricaRigheIsbn(isbn) {
     `<span style="background:#fed7d7;padding:.3rem .7rem;border-radius:6px;color:#c53030"><strong>${totMancanti}</strong> mancanti</span>`;
 
   document.getElementById('cm-qty').value = totMancanti > 0 ? totMancanti : 1;
-  document.getElementById('cm-qty').max   = totMancanti > 0 ? totMancanti : 999;
+  document.getElementById('cm-qty').max   = 9999;
 
   // Mostra tutte le righe: prima le aperte, poi le già evase (grigie)
   const tutteOrdinate = [...aperte, ...righeArricchite.filter(r => (r.quantita_arrivata||0) >= r.quantita)];
