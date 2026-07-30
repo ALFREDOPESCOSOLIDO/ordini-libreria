@@ -607,7 +607,10 @@
     <div id="page-ord-forn" class="page">
       <div class="header-bar">
         <div class="page-title" style="margin-bottom:0">Ordini fornitore</div>
-        <button class="btn btn-purple" onclick="apriNuovoOrdForn()">+ Nuovo ordine fornitore</button>
+        <div class="flex">
+          <button class="btn btn-secondary" onclick="stampaOrdiniFornitore()">🖨️ Stampa situazione ordini</button>
+          <button class="btn btn-purple" onclick="apriNuovoOrdForn()">+ Nuovo ordine fornitore</button>
+        </div>
       </div>
       <div class="section-card" id="pendenti-box" style="display:none">
         <h3 style="color:#e53e3e">⚠️ Libri da ordinare al fornitore</h3>
@@ -2743,6 +2746,121 @@ document.addEventListener('click', e => {
   if (!e.target.closest('#det-cat-search') && !e.target.closest('#det-cat-dropdown'))
     document.getElementById('det-cat-dropdown').style.display = 'none';
 });
+
+// ── Stampa situazione ordini fornitore ───────────────
+async function stampaOrdiniFornitore() {
+  load(true);
+  const oggi = new Date().toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' });
+
+  // 1. Libri in ordine a fornitore non ancora arrivati
+  const { data: ofs } = await sb.from('ordini_fornitore')
+    .select('id,data_ordine,fornitore,fornitori(nome)')
+    .order('data_ordine', { ascending: false });
+  const ofIds = (ofs||[]).map(o => o.id);
+  const { data: rof } = ofIds.length
+    ? await sb.from('righe_ordine_fornitore').select('*').in('ordine_fornitore_id', ofIds)
+    : { data: [] };
+  const ofMap = {}; (ofs||[]).forEach(o => { ofMap[o.id] = o; });
+
+  // Raggruppa righe pendenti per ordine fornitore
+  const pendenti = (rof||[]).filter(r => (r.quantita_arrivata||0) < r.quantita);
+  const gruppiOf = {};
+  pendenti.forEach(r => {
+    const k = r.ordine_fornitore_id;
+    if (!gruppiOf[k]) gruppiOf[k] = [];
+    gruppiOf[k].push(r);
+  });
+
+  // 2. Libri ordinati da clienti ma non ancora ordinati al fornitore
+  const { data: roNonOrd } = await sb.from('righe_ordine')
+    .select('isbn,titolo,autore,editore,prezzo_unitario,quantita,quantita_ordinata_fornitore')
+    .or('quantita_ordinata_fornitore.is.null,quantita_ordinata_fornitore.eq.0');
+  const daOrdinare = (roNonOrd||[]).filter(r => r.titolo);
+
+  load(false);
+
+  const thS = 'padding:6px 8px;font-size:11px;text-align:left;font-weight:600;color:#444;background:#eef2f7';
+  const tdS = 'padding:5px 8px;font-size:13px;border-bottom:1px solid #eee';
+
+  // Sezione 1: in ordine a fornitore
+  const sezPendenti = Object.keys(gruppiOf).length === 0
+    ? '<p style="color:#718096;font-size:13px">Nessun libro in attesa dal fornitore.</p>'
+    : Object.entries(gruppiOf).map(([ofId, righe]) => {
+        const of = ofMap[ofId] || {};
+        const nomeF = of.fornitori?.nome || of.fornitore || '—';
+        const totManca = righe.reduce((s,r) => s + r.quantita - (r.quantita_arrivata||0), 0);
+        const rows = righe.map((r,i) => {
+          const manca = r.quantita - (r.quantita_arrivata||0);
+          return `<tr style="background:${i%2?'#f9fafb':'#fff'}">
+            <td style="${tdS};font-family:monospace;font-size:11px;color:#666">${r.isbn||'—'}</td>
+            <td style="${tdS}"><strong>${r.titolo||'—'}</strong><br><span style="font-size:11px;color:#718096">${r.autore||''}${r.editore?' · '+r.editore:''}</span></td>
+            <td style="${tdS};text-align:center">${r.quantita}</td>
+            <td style="${tdS};text-align:center;color:#276749">${r.quantita_arrivata||0}</td>
+            <td style="${tdS};text-align:center;font-weight:700;color:#c53030">${manca}</td>
+          </tr>`;
+        }).join('');
+        return `<div style="margin-bottom:16px">
+          <div style="background:#2d4a6e;color:#fff;padding:6px 10px;border-radius:4px 4px 0 0;display:flex;justify-content:space-between">
+            <strong>${nomeF}</strong>
+            <span style="font-size:12px">Ordine del ${fmtDate(of.data_ordine)} — <strong>${totManca}</strong> cop. mancanti</span>
+          </div>
+          <table style="width:100%;border-collapse:collapse;border:1px solid #ddd;border-top:none">
+            <thead><tr>
+              <th style="${thS}">ISBN</th><th style="${thS}">Titolo</th>
+              <th style="${thS};text-align:center">Ord.</th>
+              <th style="${thS};text-align:center">Arr.</th>
+              <th style="${thS};text-align:center;color:#c53030">Mancanti</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+      }).join('');
+
+  // Sezione 2: da ordinare
+  const sezDaOrd = daOrdinare.length === 0
+    ? '<p style="color:#718096;font-size:13px">Nessun libro in attesa di essere ordinato al fornitore.</p>'
+    : `<table style="width:100%;border-collapse:collapse;border:1px solid #ddd">
+        <thead><tr>
+          <th style="${thS}">ISBN</th><th style="${thS}">Titolo</th>
+          <th style="${thS}">Editore</th>
+          <th style="${thS};text-align:center">Q.tà cliente</th>
+          <th style="${thS};text-align:right">Prezzo</th>
+        </tr></thead>
+        <tbody>${daOrdinare.map((r,i) => `<tr style="background:${i%2?'#f9fafb':'#fff'}">
+          <td style="${tdS};font-family:monospace;font-size:11px;color:#666">${r.isbn||'—'}</td>
+          <td style="${tdS}"><strong>${r.titolo}</strong><br><span style="font-size:11px;color:#718096">${r.autore||''}</span></td>
+          <td style="${tdS}">${r.editore||'—'}</td>
+          <td style="${tdS};text-align:center">${r.quantita}</td>
+          <td style="${tdS};text-align:right">€ ${(r.prezzo_unitario||0).toFixed(2).replace('.',',')}</td>
+        </tr>`).join('')}</tbody>
+      </table>`;
+
+  const html = `<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8">
+    <title>Situazione ordini fornitore — ${oggi}</title>
+    <style>
+      * { box-sizing:border-box; margin:0; padding:0; }
+      body { font-family: Arial, sans-serif; padding: 20px; color: #222; font-size: 13px; }
+      h2 { font-size: 15px; margin: 20px 0 10px; padding-bottom: 4px; border-bottom: 2px solid #2d4a6e; color: #2d4a6e; }
+      @media print { button { display:none !important; } @page { margin:1.5cm; size:A4; } }
+    </style>
+  </head><body>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div>
+        <h1 style="font-size:17px">🏭 Situazione ordini fornitore</h1>
+        <div style="color:#718096;font-size:12px">Stampato il ${oggi}</div>
+      </div>
+      <button onclick="window.print()" style="background:#2d4a6e;color:#fff;border:none;padding:7px 16px;border-radius:6px;font-size:13px;cursor:pointer">🖨️ Stampa</button>
+    </div>
+    <h2>📦 In attesa dal fornitore (${pendenti.length} titoli)</h2>
+    ${sezPendenti}
+    <h2 style="color:#c53030;border-bottom-color:#c53030">⚠️ Da ordinare al fornitore (${daOrdinare.length} titoli)</h2>
+    ${sezDaOrd}
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+}
 
 // ── Stampa lista pacchi ───────────────────────────────
 async function stampaListaPacchi(inputId) {
