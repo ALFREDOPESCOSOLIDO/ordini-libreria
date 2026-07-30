@@ -2782,8 +2782,7 @@ async function stampaListaPacchi(inputId) {
     const c = r.ordini?.clienti;
     const key = c?.id || 'sconosciuto';
     if (!clientiMap[key]) clientiMap[key] = { cliente: c, libri: [] };
-    const disp = (r.quantita_arrivata||0) - (r.quantita_consegnata||0);
-    clientiMap[key].libri.push({ ...r, disp });
+    clientiMap[key].libri.push(r); // disp già impostato da rof.quantita_arrivata
   });
 
   const oggi = new Date().toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' });
@@ -2809,10 +2808,10 @@ async function stampaListaPacchi(inputId) {
     return `
       <div style="page-break-inside:avoid;margin-bottom:24px;border:2px solid #1a3a5c;border-radius:6px;overflow:hidden;display:flex">
         <!-- Intestazione verticale sinistra -->
-        <div style="background:#1a3a5c;color:#fff;min-width:60px;width:60px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <div style="writing-mode:vertical-lr;transform:rotate(180deg);white-space:nowrap;padding:12px 0">
-            <span style="font-size:28px;font-weight:900;letter-spacing:2px">${nome}</span>
-            ${classe||scuola ? `<span style="font-size:14px;opacity:.8;margin-top:6px">${classe}${scuola}</span>` : ''}
+        <div style="background:#1a3a5c;color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:4px 2px">
+          <div style="writing-mode:vertical-lr;transform:rotate(180deg);white-space:nowrap;display:flex;flex-direction:row;align-items:center;gap:4px">
+            ${nome.split(' ').map(w=>`<span style="font-size:26px;font-weight:900;letter-spacing:1px">${w}</span>`).join('')}
+            ${classe ? `<span style="font-size:12px;opacity:.75">${cliente?.classe||''}</span>` : ''}
           </div>
         </div>
         <!-- Contenuto libri -->
