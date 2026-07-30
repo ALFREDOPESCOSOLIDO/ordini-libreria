@@ -262,9 +262,6 @@
         </div>
       </div>
 
-      <!-- Debug panel -->
-      <div id="debug-classe-box" style="display:none;background:#fff8e1;border:1px solid #f6c90e;border-radius:8px;padding:1rem;margin-bottom:1rem;font-size:.8rem;font-family:monospace;white-space:pre-wrap;word-break:break-all"></div>
-
       <!-- Libri classe (appare solo per clienti medie) -->
       <div id="libri-classe-box" class="section-card" style="display:none;background:#f0fff4;border:1px solid #9ae6b4">
         <div class="header-bar" style="margin-bottom:.75rem">
@@ -779,6 +776,8 @@
           <span style="font-family:monospace;font-size:.8rem;color:#718096" id="cm-isbn-label"></span>
         </div>
 
+        <div id="cm-totali" style="display:flex;gap:1.5rem;margin-bottom:.75rem;font-size:.85rem;flex-wrap:wrap"></div>
+
         <table style="width:100%;border-collapse:collapse;margin-bottom:1rem">
           <thead><tr style="background:#edf2f7">
             <th style="padding:7px 8px;font-size:.75rem;text-align:left">Data ordine</th>
@@ -1006,15 +1005,7 @@ async function onClienteSelezionato() {
       })
     );
     load(false);
-    if (!(data||[]).length) {
-      box.style.display = 'none';
-      const allClassi = [...new Set((tuttiLibri||[]).flatMap(b=>b.classi||[]))].sort();
-      const dbg = document.getElementById('debug-classe-box');
-      dbg.style.display = 'block';
-      dbg.textContent = `CLASSE CLIENTE: "${classe}"\nCLASSE BREVE: "${classeBreve}"\nTOT LIBRI CATALOGO: ${(tuttiLibri||[]).length}\nTUTTE LE CLASSI NEL CATALOGO (${allClassi.length}):\n${allClassi.map((c,i)=>`  [${i}] "${c}"`).join('\n')}`;
-      return;
-    }
-    document.getElementById('debug-classe-box').style.display = 'none';
+    if (!(data||[]).length) { box.style.display = 'none'; return; }
     document.getElementById('libri-classe-list').innerHTML = (data||[]).map(b => `
       <div style="display:flex;align-items:center;gap:.75rem;padding:.45rem 0;border-bottom:1px solid #c6f6d5;font-size:.875rem">
         <input type="checkbox" id="lc-${b.id}" data-libro='${JSON.stringify(b).replace(/'/g,"&#39;")}' checked style="width:auto;flex-shrink:0">
@@ -2509,22 +2500,34 @@ async function _caricaRigheIsbn(isbn) {
   document.getElementById('cm-titolo').textContent = primaRiga?.titolo || '—';
   document.getElementById('cm-autore').textContent  = primaRiga?.autore  || '';
 
-  const totMancanti = aperte.reduce((s,r) => s + r.quantita - (r.quantita_arrivata||0), 0);
-  document.getElementById('cm-qty').value = Math.min(totMancanti, totMancanti);
-  document.getElementById('cm-qty').max   = totMancanti;
+  const totOrdinati  = righeArricchite.reduce((s,r) => s + r.quantita, 0);
+  const totArrivati  = righeArricchite.reduce((s,r) => s + (r.quantita_arrivata||0), 0);
+  const totMancanti  = totOrdinati - totArrivati;
 
-  document.getElementById('cm-righe-tb').innerHTML = aperte.length === 0
-    ? '<tr><td colspan="6" class="text-muted" style="padding:1rem;text-align:center">Tutte le copie sono già arrivate</td></tr>'
-    : aperte.map((r,i) => {
-        const manca = r.quantita - (r.quantita_arrivata||0);
+  document.getElementById('cm-totali').innerHTML =
+    `<span style="background:#edf2f7;padding:.3rem .7rem;border-radius:6px"><strong>${totOrdinati}</strong> ordinati</span>` +
+    `<span style="background:#c6f6d5;padding:.3rem .7rem;border-radius:6px"><strong>${totArrivati}</strong> arrivati</span>` +
+    `<span style="background:#fed7d7;padding:.3rem .7rem;border-radius:6px;color:#c53030"><strong>${totMancanti}</strong> mancanti</span>`;
+
+  document.getElementById('cm-qty').value = totMancanti > 0 ? totMancanti : 1;
+  document.getElementById('cm-qty').max   = totMancanti > 0 ? totMancanti : 999;
+
+  // Mostra tutte le righe: prima le aperte, poi le già evase (grigie)
+  const tutteOrdinate = [...aperte, ...righeArricchite.filter(r => (r.quantita_arrivata||0) >= r.quantita)];
+  document.getElementById('cm-righe-tb').innerHTML = tutteOrdinate.length === 0
+    ? '<tr><td colspan="6" class="text-muted" style="padding:1rem;text-align:center">Nessuna riga trovata</td></tr>'
+    : tutteOrdinate.map((r,i) => {
+        const manca  = r.quantita - (r.quantita_arrivata||0);
+        const evasa  = manca <= 0;
         const cliente = nomeC(r._cliente) || '—';
-        return `<tr style="background:${i%2?'#f9fafb':'#fff'}">
+        const bg = evasa ? '#f9fafb' : (i%2?'#fff8f0':'#fff');
+        return `<tr style="background:${bg};opacity:${evasa?'0.6':'1'}">
           <td style="padding:6px 8px;font-size:.85rem">${fmtDate(r.ordini_fornitore?.data_ordine)}</td>
           <td style="padding:6px 8px;font-size:.85rem">${r.ordini_fornitore?.fornitore||'—'}</td>
           <td style="padding:6px 8px;font-size:.85rem">${cliente}</td>
           <td style="padding:6px 8px;text-align:center">${r.quantita}</td>
           <td style="padding:6px 8px;text-align:center">${r.quantita_arrivata||0}</td>
-          <td style="padding:6px 8px;text-align:center;font-weight:700;color:#c53030">${manca}</td>
+          <td style="padding:6px 8px;text-align:center;font-weight:700;color:${evasa?'#38a169':'#c53030'}">${evasa?'✓':manca}</td>
         </tr>`;
       }).join('');
 
