@@ -353,9 +353,17 @@
       <div class="section-card">
         <div class="header-bar" style="margin-bottom:.75rem">
           <h3 style="margin-bottom:0">Libri ordinati</h3>
-          <button class="btn btn-purple btn-sm" id="btn-ord-forn" onclick="mostraFormOrdForn()">🏭 Ordina al fornitore</button>
+          <div class="flex">
+            <button class="btn btn-secondary btn-sm" id="btn-modifica-libri" onclick="toggleEditLibri()">✏️ Modifica</button>
+            <button class="btn btn-purple btn-sm" id="btn-ord-forn" onclick="mostraFormOrdForn()">🏭 Ordina al fornitore</button>
+          </div>
         </div>
         <div style="overflow-x:auto"><div id="det-libri"></div></div>
+        <div id="det-aggiungi-libro" style="display:none;margin-top:.75rem;padding:.75rem;background:#f0fff4;border-radius:8px;border:1px solid #9ae6b4">
+          <label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:.35rem">+ Aggiungi libro dal catalogo</label>
+          <input type="text" id="det-cat-search" placeholder="Cerca ISBN o titolo…" oninput="cercaCatalogoOrdine(this.value)" autocomplete="off">
+          <div id="det-cat-dropdown" style="display:none;background:#fff;border:1px solid #cbd5e0;border-radius:6px;max-height:200px;overflow-y:auto;margin-top:.25rem"></div>
+        </div>
         <div id="form-ord-forn" class="sub-form" style="display:none">
           <h4>🏭 Ordina al fornitore</h4>
           <div class="grid-2">
@@ -841,7 +849,7 @@
 //  STATO GLOBALE
 // ══════════════════════════════════════════════════════
 let sb = null;
-let _ordineId = null, _ordineCache = null;
+let _ordineId = null, _ordineCache = null, _editLibriMode = false;
 let _clientiMap = {}; // id → {tipo_cliente, classe}
 let _ordFornitoreId = null, _ordFornitoreCache = null;
 let _dopoCliente = null;
@@ -1193,6 +1201,8 @@ function renderDetOrdine() {
   hideEl('form-ord-forn'); hideEl('form-consegna'); hideEl('form-pagamento');
   const daoOrdinare = righe.some(r=>r.quantita>(r.quantita_ordinata_fornitore||0));
   document.getElementById('btn-ord-forn').style.display = daoOrdinare?'inline-flex':'none';
+  document.getElementById('btn-modifica-libri').textContent = _editLibriMode ? '✓ Fine modifica' : '✏️ Modifica';
+  document.getElementById('det-aggiungi-libro').style.display = _editLibriMode ? 'block' : 'none';
   document.getElementById('det-libri').innerHTML = `
     <table style="width:100%;border-collapse:collapse">
       <thead><tr>
@@ -1202,9 +1212,11 @@ function renderDetOrdine() {
         <th style="${thS}" title="Arrivati dal fornitore">Arr.</th>
         <th style="${thS}" title="Consegnati al cliente">Cons.</th>
         <th style="${thS}">Disponibili</th>
+        ${_editLibriMode?`<th style="${thS}"></th>`:''}
       </tr></thead>
       <tbody>${righe.map(r=>{
         const qof=r.quantita_ordinata_fornitore||0,qa=r.quantita_arrivata||0,qc=r.quantita_consegnata||0,disp=qa-qc;
+        const puoElim = qa === 0 && qc === 0;
         return `<tr>
           <td style="${tdS};font-size:.78rem;color:#718096">${r.isbn||'—'}</td>
           <td style="${tdS}"><strong>${r.titolo}</strong><br><span class="text-muted text-sm">${r.autore||''}${r.editore?' · '+r.editore:''}</span></td>
@@ -1214,6 +1226,7 @@ function renderDetOrdine() {
           <td style="${tdS};text-align:center;color:${qa<qof?'#dd6b20':'#38a169'}">${qa}</td>
           <td style="${tdS};text-align:center;color:#38a169;font-weight:700">${qc}</td>
           <td style="${tdS};text-align:center">${disp>0?`<span class="badge b-green">✓ ${disp}</span>`:disp===0&&qc>=r.quantita?`<span class="badge b-gray">—</span>`:`<span class="badge b-orange">0</span>`}</td>
+          ${_editLibriMode?`<td style="${tdS}">${puoElim?`<button class="btn btn-danger btn-sm" onclick="eliminaRigaOrdine('${r.id}',${qof>0})">✕</button>`:`<span class="text-muted text-sm" title="Già arrivato o consegnato">—</span>`}</td>`:''}
         </tr>`;
       }).join('')}</tbody>
     </table>
@@ -2638,6 +2651,87 @@ async function registraCarico() {
   const isbn = document.getElementById('cm-isbn').value.trim();
   await _caricaRigheIsbn(isbn);
 }
+
+// ── Modifica libri ordine ─────────────────────────────
+function toggleEditLibri() {
+  _editLibriMode = !_editLibriMode;
+  if (!_editLibriMode) document.getElementById('det-cat-search').value = '';
+  document.getElementById('det-cat-dropdown').style.display = 'none';
+  renderDetOrdine();
+}
+
+async function eliminaRigaOrdine(rigaId, haFornitore) {
+  const msg = haFornitore
+    ? 'Questo libro è stato ordinato al fornitore. Eliminandolo verranno cancellate anche le righe dell\'ordine fornitore corrispondenti. Continuare?'
+    : 'Eliminare questo libro dall\'ordine?';
+  if (!confirm(msg)) return;
+  load(true);
+  // Cancella righe_ordine_fornitore collegate
+  if (haFornitore) {
+    await sb.from('righe_ordine_fornitore').delete().eq('riga_ordine_id', rigaId);
+  }
+  // Cancella riga ordine
+  await sb.from('righe_ordine').delete().eq('id', rigaId);
+  // Ricalcola totale_libri
+  const { data: righeRim } = await sb.from('righe_ordine').select('prezzo_unitario,quantita').eq('ordine_id', _ordineId);
+  const nuovoTot = (righeRim||[]).reduce((s,r) => s + (r.prezzo_unitario||0) * (r.quantita||1), 0);
+  await sb.from('ordini').update({ totale_libri: nuovoTot }).eq('id', _ordineId);
+  load(false);
+  await loadOrdineDettaglio(_ordineId);
+}
+
+async function aggiungiLibroOrdine(b) {
+  document.getElementById('det-cat-dropdown').style.display = 'none';
+  document.getElementById('det-cat-search').value = '';
+  // Controlla duplicato
+  if (_ordineCache.righe.some(r => r.isbn === b.isbn)) {
+    alert('Questo libro è già presente nell\'ordine.');
+    return;
+  }
+  load(true);
+  await sb.from('righe_ordine').insert({
+    ordine_id: _ordineId,
+    isbn: b.isbn,
+    titolo: b.titolo,
+    autore: b.autore||null,
+    editore: b.editore||null,
+    prezzo_unitario: b.prezzo||0,
+    quantita: 1,
+    quantita_ordinata_fornitore: 0,
+    quantita_arrivata: 0,
+    quantita_consegnata: 0,
+  });
+  const { data: righeAll } = await sb.from('righe_ordine').select('prezzo_unitario,quantita').eq('ordine_id', _ordineId);
+  const nuovoTot = (righeAll||[]).reduce((s,r) => s + (r.prezzo_unitario||0) * (r.quantita||1), 0);
+  await sb.from('ordini').update({ totale_libri: nuovoTot }).eq('id', _ordineId);
+  load(false);
+  await loadOrdineDettaglio(_ordineId);
+}
+
+let _detCatTimer = null;
+function cercaCatalogoOrdine(q) {
+  clearTimeout(_detCatTimer);
+  const dd = document.getElementById('det-cat-dropdown');
+  if ((q||'').trim().length < 2) { dd.style.display = 'none'; return; }
+  _detCatTimer = setTimeout(async () => {
+    const { data } = await sb.from('catalogo_libri')
+      .select('id,isbn,titolo,volume,autore,editore,prezzo,materia')
+      .or(`isbn.ilike.%${q}%,titolo.ilike.%${q}%`)
+      .limit(10);
+    if (!(data||[]).length) { dd.innerHTML = '<div style="padding:.5rem .75rem;font-size:.85rem;color:#718096">Nessun risultato</div>'; dd.style.display='block'; return; }
+    dd.innerHTML = data.map(b => `<div style="padding:.5rem .75rem;font-size:.85rem;cursor:pointer;border-bottom:1px solid #f0f0f0" onmousedown="aggiungiLibroOrdine(${JSON.stringify(b).replace(/"/g,'&quot;')})">
+      <strong>${b.materia||''}${b.volume?' Vol.'+b.volume:''} — ${b.titolo}</strong>
+      <span style="color:#38a169;font-weight:700;margin-left:.5rem">€ ${fmt(b.prezzo)}</span>
+      <div style="color:#718096;font-size:.75rem">${b.isbn||''} · ${b.editore||''}</div>
+    </div>`).join('');
+    dd.style.display = 'block';
+  }, 250);
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('#det-cat-search') && !e.target.closest('#det-cat-dropdown'))
+    document.getElementById('det-cat-dropdown').style.display = 'none';
+});
 
 // ── Elenco carichi ricevuti ───────────────────────────
 async function loadElencoCarichi() {
