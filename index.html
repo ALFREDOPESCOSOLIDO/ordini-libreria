@@ -814,8 +814,10 @@
           <button class="btn btn-success" onclick="registraCarico()" style="align-self:flex-end">✅ Registra carico</button>
         </div>
         <div id="cm-msg" style="display:none;margin-top:.75rem;padding:.75rem 1rem;border-radius:8px;font-size:.9rem"></div>
-        <div style="margin-top:1rem;border-top:1px solid #e2e8f0;padding-top:1rem">
-          <button class="btn btn-secondary" onclick="stampaListaPacchi()">🖨️ Stampa lista pacchi da consegnare</button>
+        <div style="margin-top:1rem;border-top:1px solid #e2e8f0;padding-top:1rem;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+          <label style="font-size:.85rem;font-weight:600">🖨️ Stampa pacchi del giorno:</label>
+          <input type="date" id="cm-data-stampa" style="font-size:.9rem;padding:.3rem .6rem;border:1px solid #cbd5e0;border-radius:6px">
+          <button class="btn btn-secondary" onclick="stampaListaPacchi('cm-data-stampa')">Stampa lista pacchi</button>
         </div>
       </div>
     </div>
@@ -824,8 +826,9 @@
     <div id="page-elenco-carichi" class="page">
       <div class="header-bar">
         <div class="page-title">📋 Elenco carichi ricevuti</div>
-        <div class="flex">
-          <button class="btn btn-secondary" onclick="stampaListaPacchi()">🖨️ Stampa lista pacchi</button>
+        <div class="flex" style="flex-wrap:wrap;gap:.5rem;align-items:center">
+          <input type="date" id="ec-data-stampa" style="font-size:.85rem;padding:.3rem .6rem;border:1px solid #cbd5e0;border-radius:6px">
+          <button class="btn btn-secondary" onclick="stampaListaPacchi('ec-data-stampa')">🖨️ Stampa lista pacchi</button>
           <button class="btn btn-secondary" onclick="loadElencoCarichi()">🔄 Aggiorna</button>
         </div>
       </div>
@@ -926,6 +929,8 @@ function navTo(name) {
   if (nav) nav.classList.add('active');
   if (name === 'importa-pdf') resetImportaPdf();
   const loaders = { dashboard: loadDashboard, ordini: loadOrdini, clienti: loadClienti, 'ord-forn': loadOrdForn, catalogo: loadCatalogo, fornitori: loadFornitori, 'elenco-carichi': loadElencoCarichi };
+  if (name === 'carico-merce') { const el = document.getElementById('cm-data-stampa'); if (el && !el.value) el.value = today(); }
+  if (name === 'elenco-carichi') { const el = document.getElementById('ec-data-stampa'); if (el && !el.value) el.value = today(); }
   if (loaders[name]) loaders[name]();
 }
 
@@ -2633,7 +2638,7 @@ async function registraCarico() {
     const daAssegnare = Math.min(rimaste, manca);
     const nuovaQty = (riga.quantita_arrivata||0) + daAssegnare;
     await sb.from('righe_ordine_fornitore')
-      .update({ quantita_arrivata: nuovaQty })
+      .update({ quantita_arrivata: nuovaQty, data_arrivo: today() })
       .eq('id', riga.id);
     // Aggiorna anche quantita_arrivata su righe_ordine se completato
     if (riga.riga_ordine_id && nuovaQty >= riga.quantita) {
@@ -2740,15 +2745,35 @@ document.addEventListener('click', e => {
 });
 
 // ── Stampa lista pacchi ───────────────────────────────
-async function stampaListaPacchi() {
+async function stampaListaPacchi(inputId) {
+  const dataFiltro = document.getElementById(inputId || 'cm-data-stampa')?.value || today();
+  if (!dataFiltro) { alert('Seleziona una data'); return; }
   load(true);
-  // Prendi tutte le righe arrivate ma non ancora consegnate
-  const { data: righe } = await sb.from('righe_ordine')
-    .select('id,isbn,titolo,autore,editore,prezzo_unitario,quantita_arrivata,quantita_consegnata,ordini(id,data_ordine,clienti(id,nome,cognome,classe,scuola))')
+
+  // Prendi le righe_ordine_fornitore arrivate nella data selezionata
+  const { data: ofs } = await sb.from('ordini_fornitore').select('id');
+  const ofIds = (ofs||[]).map(o => o.id);
+  const { data: rof } = await sb.from('righe_ordine_fornitore')
+    .select('riga_ordine_id,isbn,quantita,quantita_arrivata,data_arrivo')
+    .in('ordine_fornitore_id', ofIds)
+    .eq('data_arrivo', dataFiltro)
     .gt('quantita_arrivata', 0);
+
+  if (!(rof||[]).length) { load(false); alert(`Nessun carico registrato per il ${fmtDate(dataFiltro)}.`); return; }
+
+  // Prendi le righe_ordine collegate per avere info cliente e prezzo
+  const rigaIds = [...new Set((rof||[]).map(r => r.riga_ordine_id).filter(Boolean))];
+  const { data: righe } = await sb.from('righe_ordine')
+    .select('id,isbn,titolo,autore,editore,prezzo_unitario,quantita_consegnata,ordini(clienti(id,nome,cognome,classe,scuola))')
+    .in('id', rigaIds);
   load(false);
 
-  const daPack = (righe||[]).filter(r => (r.quantita_arrivata||0) > (r.quantita_consegnata||0));
+  const righeMap = {}; (righe||[]).forEach(r => { righeMap[r.id] = r; });
+
+  const daPack = (rof||[]).map(r => {
+    const ro = righeMap[r.riga_ordine_id] || {};
+    return { ...ro, disp: r.quantita_arrivata };
+  }).filter(r => r.titolo);
   if (!daPack.length) { alert('Nessun libro arrivato da consegnare.'); return; }
 
   // Raggruppa per cliente
