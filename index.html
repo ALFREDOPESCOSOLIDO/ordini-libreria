@@ -2504,6 +2504,11 @@ async function _caricaRigheIsbn(isbn) {
 
   // Filtra solo quelle con copie ancora mancanti
   const aperte = righeArricchite.filter(r => (r.quantita_arrivata||0) < r.quantita);
+
+  const totOrdinati  = righeArricchite.reduce((s,r) => s + r.quantita, 0);
+  const totArrivati  = righeArricchite.reduce((s,r) => s + (r.quantita_arrivata||0), 0);
+  const totMancanti  = totOrdinati - totArrivati;
+
   load(false);
 
   // Ordina per data ordine ASC (più vecchio prima)
@@ -2516,10 +2521,6 @@ async function _caricaRigheIsbn(isbn) {
   document.getElementById('cm-isbn-label').textContent = isbn;
   document.getElementById('cm-titolo').textContent = primaRiga?.titolo || '—';
   document.getElementById('cm-autore').textContent  = primaRiga?.autore  || '';
-
-  const totOrdinati  = righeArricchite.reduce((s,r) => s + r.quantita, 0);
-  const totArrivati  = righeArricchite.reduce((s,r) => s + (r.quantita_arrivata||0), 0);
-  const totMancanti  = totOrdinati - totArrivati;
 
   document.getElementById('cm-totali').innerHTML =
     `<span style="background:#edf2f7;padding:.3rem .7rem;border-radius:6px"><strong>${totOrdinati}</strong> ordinati</span>` +
