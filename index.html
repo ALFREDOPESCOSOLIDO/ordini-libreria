@@ -1004,7 +1004,7 @@ async function loadOrdini() {
   const { data: ordini } = await query;
   let list = ordini||[];
   if (q) list = list.filter(o => nomeC(o.clienti).toLowerCase().includes(q));
-  list.sort((a,b) => nomeC(a.clienti).localeCompare(nomeC(b.clienti), 'it'));
+  list.sort((a,b) => (a.clienti?.cognome||'').localeCompare(b.clienti?.cognome||'', 'it'));
   const ids = list.map(o=>o.id);
   let pagMap = {};
   if (ids.length) {
@@ -2059,7 +2059,7 @@ async function salvaArrivo() {
 async function loadClienti() {
   const q    = (document.getElementById('f-clienti')?.value||'').toLowerCase();
   const tipo = document.getElementById('f-tipo-cliente')?.value||'';
-  let query  = sb.from('clienti').select('*').order('nome');
+  let query  = sb.from('clienti').select('*').order('cognome');
   if (tipo) query = query.eq('tipo_cliente', tipo);
   const { data: clienti } = await query;
   let list = (clienti||[]);
