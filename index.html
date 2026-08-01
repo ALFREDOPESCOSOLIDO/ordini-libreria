@@ -420,6 +420,22 @@
           </div>
         </div>
       </div>
+      <div class="section-card">
+        <div class="header-bar" style="margin-bottom:.75rem">
+          <h3 style="margin-bottom:0">📚 Foderatura</h3>
+        </div>
+        <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:.5rem;font-size:.95rem;cursor:pointer">
+            <input type="checkbox" id="det-foderatura" onchange="toggleDetFod()" style="width:auto;accent-color:#553c9a">
+            Richiesta foderatura libri
+          </label>
+          <div id="det-fod-prezzo-wrap" style="display:none;align-items:center;gap:.5rem">
+            <label style="font-size:.85rem;white-space:nowrap">Costo €</label>
+            <input type="number" id="det-fod-prezzo" min="0" step="0.50" style="width:90px">
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="salvaFoderatura()">✓ Salva</button>
+        </div>
+      </div>
       <div class="totali-box">
         <div class="tot-row"><span>Totale libri</span><span id="d-libri">—</span></div>
         <div class="tot-row"><span>Foderatura</span><span id="d-fod">—</span></div>
@@ -988,6 +1004,7 @@ async function loadOrdini() {
   const { data: ordini } = await query;
   let list = ordini||[];
   if (q) list = list.filter(o => nomeC(o.clienti).toLowerCase().includes(q));
+  list.sort((a,b) => nomeC(a.clienti).localeCompare(nomeC(b.clienti), 'it'));
   const ids = list.map(o=>o.id);
   let pagMap = {};
   if (ids.length) {
@@ -1003,7 +1020,7 @@ async function loadOrdini() {
     return `<tr class="clickable" onclick="aprireOrdine('${o.id}')">
       <td>${fmtDate(o.data_ordine)}</td><td><strong>${nomeC(o.clienti)}</strong></td>
       <td>€ ${fmt(o.totale_libri)}</td>
-      <td>${o.servizio_foderatura?`✓ € ${fmt(o.costo_foderatura||0)}`:'—'}</td>
+      <td>${o.servizio_foderatura?`<span style="background:#d6bcfa;color:#553c9a;padding:2px 8px;border-radius:12px;font-size:.78rem;font-weight:700">📚 FODERATURA € ${fmt(o.costo_foderatura||0)}</span>`:'<span style="color:#cbd5e0;font-size:.82rem">—</span>'}</td>
       <td><strong>€ ${fmt(tot)}</strong></td>
       <td style="color:#38a169">€ ${fmt(pag)}</td>
       <td style="color:${res>0.009?'#e53e3e':'#38a169'}"><strong>€ ${fmt(res)}</strong></td>
@@ -1267,6 +1284,10 @@ function renderDetOrdine() {
   const totP=pagamenti.reduce((s,p)=>s+p.importo,0), tot=ordine.totale_libri+(ordine.costo_foderatura||0);
   document.getElementById('d-libri').textContent = `€ ${fmt(ordine.totale_libri)}`;
   document.getElementById('d-fod').textContent   = ordine.servizio_foderatura?`€ ${fmt(ordine.costo_foderatura||0)}`:'—';
+  const fodCb = document.getElementById('det-foderatura');
+  fodCb.checked = !!ordine.servizio_foderatura;
+  document.getElementById('det-fod-prezzo').value = ordine.costo_foderatura||0;
+  document.getElementById('det-fod-prezzo-wrap').style.display = ordine.servizio_foderatura ? 'flex' : 'none';
   document.getElementById('d-tot').textContent   = `€ ${fmt(tot)}`;
   document.getElementById('d-pag').textContent   = `€ ${fmt(totP)}`;
   document.getElementById('d-res').textContent   = `€ ${fmt(tot-totP)}`;
@@ -2664,6 +2685,23 @@ async function registraCarico() {
   // Ricarica la tabella per aggiornare i conteggi
   const isbn = document.getElementById('cm-isbn').value.trim();
   await _caricaRigheIsbn(isbn);
+}
+
+// ── Foderatura ────────────────────────────────────────
+function toggleDetFod() {
+  document.getElementById('det-fod-prezzo-wrap').style.display =
+    document.getElementById('det-foderatura').checked ? 'flex' : 'none';
+}
+
+async function salvaFoderatura() {
+  const fod = document.getElementById('det-foderatura').checked;
+  const costo = fod ? parseFloat(document.getElementById('det-fod-prezzo').value||0) : 0;
+  load(true);
+  const { data: righe } = await sb.from('righe_ordine').select('prezzo_unitario,quantita').eq('ordine_id', _ordineId);
+  const totLibri = (righe||[]).reduce((s,r) => s + (r.prezzo_unitario||0)*(r.quantita||1), 0);
+  await sb.from('ordini').update({ servizio_foderatura: fod, costo_foderatura: costo, totale_libri: totLibri }).eq('id', _ordineId);
+  load(false);
+  await loadOrdineDettaglio(_ordineId);
 }
 
 // ── Modifica libri ordine ─────────────────────────────
