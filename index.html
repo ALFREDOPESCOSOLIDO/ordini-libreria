@@ -2179,7 +2179,7 @@ const tdS='padding:.65rem 1rem;border-bottom:1px solid #f0f0f0;font-size:.875rem
 function fmt(n)     { return (parseFloat(n)||0).toFixed(2); }
 function today()    { return new Date().toISOString().split('T')[0]; }
 function fmtDate(d) { if(!d) return '—'; const [y,m,g]=d.split('-'); return `${g}/${m}/${y}`; }
-function nomeC(c)   { if(!c) return '—'; return [c.nome,c.cognome].filter(Boolean).join(' '); }
+function nomeC(c)   { if(!c) return '—'; return [c.cognome,c.nome].filter(Boolean).join(' '); }
 function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function labelTipo(t){ return {acconto:'Acconto',parziale:'Pagamento parziale',saldo:'Saldo finale'}[t]||t; }
 
