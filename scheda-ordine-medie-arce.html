@@ -190,6 +190,7 @@ function renderScheda() {
             <th style="width:22mm">ISBN</th>
             <th>Libro</th>
             <th style="width:16mm" class="r">Prezzo</th>
+            <th style="width:10mm;text-align:center">Cons.</th>
           </tr></thead>
           <tbody>
             ${bks.map(b => `<tr>
@@ -202,6 +203,7 @@ function renderScheda() {
                 <span class="aut">${[b.autore,b.editore].filter(Boolean).join(' · ')}</span>
               </td>
               <td class="r">€ ${fmt(b.prezzo)}</td>
+              <td class="c"><div class="quadratino-ord"></div></td>
             </tr>`).join('')}
           </tbody>
         </table>
