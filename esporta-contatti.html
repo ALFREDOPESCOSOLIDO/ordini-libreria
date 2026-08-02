@@ -75,17 +75,19 @@ async function esporta() {
   if (!clienti.length) { stato.className = 'errore'; stato.textContent = 'Nessun contatto trovato.'; return; }
 
   // Formato CSV Google Contatti
-  const intestazione = 'Name,Given Name,Family Name,Phone 1 - Type,Phone 1 - Value,Notes';
+  const intestazione = 'Name,Given Name,Family Name,Phone 1 - Type,Phone 1 - Value,Notes,Group Membership';
   const righe = clienti.map(c => {
     const nomeCompleto = [c.cognome, c.nome].filter(Boolean).join(' ');
     const note = c.classe ? `Classe: ${c.classe}` : '';
+    const etichetta = c.tipo_cliente === 'medie' ? 'MEDIE' : (c.tipo_cliente ? 'SUPERIORI' : '');
     return [
       csv(nomeCompleto),
       csv(c.nome||''),
       csv(c.cognome||''),
       'Mobile',
       csv(c.telefono||''),
-      csv(note)
+      csv(note),
+      csv(etichetta)
     ].join(',');
   });
 
