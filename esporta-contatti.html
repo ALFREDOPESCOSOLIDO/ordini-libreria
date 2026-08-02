@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Esporta Contatti Google</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+body { font-family: Arial, sans-serif; max-width: 600px; margin: 60px auto; padding: 0 20px; color: #333; }
+h1 { color: #003399; font-size: 20px; margin-bottom: 8px; }
+p { color: #666; font-size: 14px; margin-bottom: 24px; }
+.filtri { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+.filtri select { padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+button { background: #003399; color: #fff; border: none; padding: 10px 24px; border-radius: 6px; font-size: 15px; font-weight: 700; cursor: pointer; }
+button:hover { background: #0044cc; }
+#stato { margin-top: 16px; font-size: 14px; color: #276749; font-weight: 600; }
+#stato.errore { color: #c00; }
+</style>
+</head>
+<body>
+<h1>📤 Esporta Contatti per Google</h1>
+<p>Scarica i clienti in formato CSV pronto per importare in Google Contatti (Nome, Cognome, Telefono, Classe).</p>
+
+<div class="filtri">
+  <select id="f-tipo">
+    <option value="">Tutti i tipi</option>
+    <option value="medie">Scuola Media</option>
+    <option value="superiori">Scuola Superiore</option>
+    <option value="privato">Privato</option>
+  </select>
+  <select id="f-classe">
+    <option value="">Tutte le classi</option>
+  </select>
+</div>
+
+<button onclick="esporta()">⬇️ Scarica CSV Google Contatti</button>
+<div id="stato"></div>
+
+<script>
+const SB_URL = 'https://pzfgidqtxpnghkihwepd.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6ZmdpZHF0eHBuZ2hraWh3ZXBkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0MjUwNzIsImV4cCI6MjA5ODAwMTA3Mn0.uqwVWngmVdsQyrEF-BKpETA5o8xyMbza8I5lzQWzv8E';
+const sb = supabase.createClient(SB_URL, SB_KEY);
+
+async function init() {
+  const { data } = await sb.from('clienti').select('classe').not('classe','is',null).order('classe');
+  const classi = [...new Set((data||[]).map(c => c.classe).filter(Boolean))].sort();
+  const sel = document.getElementById('f-classe');
+  classi.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c; o.textContent = c;
+    sel.appendChild(o);
+  });
+}
+
+function csv(val) {
+  if (!val) return '';
+  const s = String(val).replace(/"/g, '""');
+  return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s;
+}
+
+async function esporta() {
+  const stato = document.getElementById('stato');
+  stato.className = '';
+  stato.textContent = 'Caricamento…';
+
+  let query = sb.from('clienti').select('nome,cognome,telefono,classe,tipo_cliente').order('cognome');
+  const tipo = document.getElementById('f-tipo').value;
+  const classe = document.getElementById('f-classe').value;
+  if (tipo) query = query.eq('tipo_cliente', tipo);
+  if (classe) query = query.eq('classe', classe);
+
+  const { data, error } = await query;
+  if (error) { stato.className = 'errore'; stato.textContent = 'Errore: ' + error.message; return; }
+
+  const clienti = (data||[]).filter(c => c.nome || c.cognome);
+  if (!clienti.length) { stato.className = 'errore'; stato.textContent = 'Nessun contatto trovato.'; return; }
+
+  // Formato CSV Google Contatti
+  const intestazione = 'Name,Given Name,Family Name,Phone 1 - Type,Phone 1 - Value,Notes';
+  const righe = clienti.map(c => {
+    const nomeCompleto = [c.cognome, c.nome].filter(Boolean).join(' ');
+    const note = c.classe ? `Classe: ${c.classe}` : '';
+    return [
+      csv(nomeCompleto),
+      csv(c.nome||''),
+      csv(c.cognome||''),
+      'Mobile',
+      csv(c.telefono||''),
+      csv(note)
+    ].join(',');
+  });
+
+  const contenuto = [intestazione, ...righe].join('\n');
+  const blob = new Blob(['﻿' + contenuto], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `contatti-libreria-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  stato.textContent = `✓ Esportati ${clienti.length} contatti.`;
+}
+
+init();
+</script>
+</body>
+</html>
