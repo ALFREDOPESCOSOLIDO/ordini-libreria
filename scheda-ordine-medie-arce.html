@@ -122,7 +122,6 @@ async function carica() {
     .from('catalogo_libri')
     .select('*')
     .eq('tipo_scuola', 'medie')
-    .ilike('scuola', '%arce%')
     .order('sort_order', { ascending: true, nullsFirst: false })
     .order('materia');
 
@@ -134,12 +133,12 @@ async function carica() {
   // Solo libri da acquistare
   _tuttiLibri = (data || []).filter(b => b.da_acquistare !== false);
 
-  // Popola selettore classi
-  const tutteClassi = [...new Set(_tuttiLibri.flatMap(b => b.classi || []))].sort((a,b) => a.localeCompare(b,'it'));
+  // Popola selettore anni (1, 2, 3)
+  const tuttiAnni = [...new Set(_tuttiLibri.flatMap(b => (b.classi||[]).map(c => c.match(/^(\d)/)?.[1]).filter(Boolean)))].sort();
   const sel = document.getElementById('sel-classe');
-  tutteClassi.forEach(c => {
+  tuttiAnni.forEach(a => {
     const o = document.createElement('option');
-    o.value = c; o.textContent = `Classe ${c}`;
+    o.value = a; o.textContent = `Anno ${a}`;
     sel.appendChild(o);
   });
 
@@ -148,44 +147,54 @@ async function carica() {
   renderScheda();
 }
 
-function renderScheda() {
-  const classeSelezionata = document.getElementById('sel-classe').value;
-  const libri = classeSelezionata
-    ? _tuttiLibri.filter(b => (b.classi || []).includes(classeSelezionata))
-    : _tuttiLibri;
+function sezioni(classi, anno) {
+  // Estrae le lettere di sezione per un dato anno: ["1A","1B","2A"] → anno=1 → "A, B"
+  return (classi||[])
+    .filter(c => c.match(/^(\d)/)?.[1] === anno)
+    .map(c => c.replace(/^\d+/,'').trim())
+    .filter(Boolean)
+    .sort()
+    .join(', ') || 'Tutte';
+}
 
-  // Raggruppa per classe
-  const gruppiMap = {};
-  libri.forEach(b => {
-    const cl = classeSelezionata ? [classeSelezionata] : (b.classi || []);
-    cl.forEach(c => {
-      if (!gruppiMap[c]) gruppiMap[c] = [];
-      if (!gruppiMap[c].find(x => x.id === b.id)) gruppiMap[c].push(b);
+function renderScheda() {
+  const annoSel = document.getElementById('sel-classe').value;
+
+  // Raggruppa per anno (1, 2, 3)
+  const gruppiAnno = {}; // anno → [libri]
+  _tuttiLibri.forEach(b => {
+    const anni = [...new Set((b.classi||[]).map(c => c.match(/^(\d)/)?.[1]).filter(Boolean))];
+    anni.forEach(a => {
+      if (annoSel && a !== annoSel) return;
+      if (!gruppiAnno[a]) gruppiAnno[a] = [];
+      if (!gruppiAnno[a].find(x => x.id === b.id)) gruppiAnno[a].push(b);
     });
   });
 
-  const classiOrdinate = Object.keys(gruppiMap).sort((a,b) => a.localeCompare(b,'it'));
+  const anniOrdinati = Object.keys(gruppiAnno).sort();
 
   let libriHtml = '';
-  if (!classiOrdinate.length) {
-    libriHtml = `<div style="padding:5mm;color:#c00;font-weight:700">Nessun libro trovato.</div>`;
+  if (!anniOrdinati.length) {
+    libriHtml = `<div style="padding:5mm;color:#c00;font-weight:700">Nessun libro trovato. Verificare tipo_scuola='medie' nel catalogo.</div>`;
   } else {
-    classiOrdinate.forEach(classe => {
-      const bks = gruppiMap[classe];
+    anniOrdinati.forEach(anno => {
+      const bks = gruppiAnno[anno];
       const tot = bks.reduce((s,b) => s + (b.prezzo||0), 0);
       libriHtml += `
       <div style="border:1px solid #555;border-radius:4px;overflow:hidden;margin-bottom:3mm">
-        <div class="classe-header">Classe ${classe}</div>
+        <div class="classe-header">Classe ${anno}ª</div>
         <table class="libri-table">
           <thead><tr>
             <th style="width:8mm;text-align:center">Ord.</th>
-            <th style="width:25mm">ISBN</th>
+            <th style="width:20mm;text-align:center">Sezioni</th>
+            <th style="width:22mm">ISBN</th>
             <th>Libro</th>
             <th style="width:16mm" class="r">Prezzo</th>
           </tr></thead>
           <tbody>
             ${bks.map(b => `<tr>
               <td class="c"><div class="quadratino-ord"></div></td>
+              <td class="c" style="font-size:9px;font-weight:700;color:#003399">${sezioni(b.classi, anno)}</td>
               <td style="font-size:8px;font-family:monospace;color:#777">${b.isbn||'—'}</td>
               <td>
                 <span class="mat">${b.materia||''}${b.volume?' · Vol.'+b.volume:''}</span>
@@ -196,12 +205,12 @@ function renderScheda() {
             </tr>`).join('')}
           </tbody>
         </table>
-        <div class="riga-tot"><span>Totale classe ${classe}</span><span class="imp">€ ${fmt(tot)}</span></div>
+        <div class="riga-tot"><span>Totale ${anno}ª classe</span><span class="imp">€ ${fmt(tot)}</span></div>
       </div>`;
     });
   }
 
-  const nomeClasse = classeSelezionata ? `— Classe ${classeSelezionata}` : '';
+  const nomeClasse = annoSel ? `— Classe ${annoSel}ª` : '';
 
   document.getElementById('contenuto').innerHTML = `
   <div class="pagina">
