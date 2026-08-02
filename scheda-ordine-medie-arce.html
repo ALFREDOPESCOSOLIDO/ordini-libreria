@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Scheda Raccolta Ordine — Medie Arce</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arial, sans-serif; font-size: 11px; background: #fff; color: #000; }
+
+/* ── LAYOUT PAGINA ── */
+.pagina {
+  width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto;
+  padding: 8mm 10mm 8mm 10mm;
+}
+
+/* ── INTESTAZIONE ── */
+.intestazione {
+  display: flex;
+  align-items: flex-start;
+  gap: 8mm;
+  margin-bottom: 5mm;
+  border-bottom: 2px solid #003399;
+  padding-bottom: 4mm;
+}
+.logo-wrap { flex: 0 0 auto; }
+.logo-wrap img { width: 38mm; height: auto; }
+.logo-wrap .no-logo {
+  width: 38mm; height: 20mm;
+  border: 1px dashed #aaa;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; color: #aaa; text-align: center;
+}
+.titolo-centro {
+  flex: 1;
+  text-align: center;
+  padding-top: 2mm;
+}
+.titolo-centro h1 {
+  font-size: 15px;
+  font-weight: 900;
+  color: #003399;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.titolo-centro h2 {
+  font-size: 11px;
+  font-weight: 600;
+  color: #444;
+  margin-top: 1mm;
+}
+.dati-header {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3mm;
+  padding-top: 2mm;
+  min-width: 55mm;
+}
+.campo-header {
+  display: flex;
+  align-items: center;
+  gap: 2mm;
+  font-size: 10px;
+  font-weight: 700;
+}
+.campo-header .linea {
+  flex: 1;
+  border-bottom: 1px solid #000;
+  min-width: 30mm;
+  height: 4mm;
+}
+.foderatura-box {
+  border: 2px solid #553c9a;
+  border-radius: 4px;
+  padding: 2mm 3mm;
+  display: flex;
+  align-items: center;
+  gap: 2mm;
+  background: #f3e8ff;
+}
+.foderatura-box span {
+  font-size: 10px;
+  font-weight: 900;
+  color: #553c9a;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.foderatura-box .quadratino {
+  width: 5mm; height: 5mm;
+  border: 2px solid #553c9a;
+  flex-shrink: 0;
+}
+
+/* ── DATI ALUNNO ── */
+.sezione-dati {
+  border: 1px solid #003399;
+  border-radius: 4px;
+  padding: 3mm 4mm;
+  margin-bottom: 3mm;
+}
+.sezione-dati .titolo-sezione {
+  font-size: 10px;
+  font-weight: 900;
+  color: #003399;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 2mm;
+  border-bottom: 1px solid #c6d4f0;
+  padding-bottom: 1mm;
+}
+.griglia-dati {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2mm 5mm;
+}
+.griglia-dati.tre-col {
+  grid-template-columns: 2fr 1fr 1.5fr;
+}
+.campo-dato {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.5mm;
+  font-size: 10px;
+  font-weight: 700;
+}
+.campo-dato .linea {
+  flex: 1;
+  border-bottom: 1px solid #555;
+  height: 4mm;
+}
+
+/* ── PAGAMENTI ── */
+.sezione-pagamenti {
+  border: 1px solid #276749;
+  border-radius: 4px;
+  padding: 3mm 4mm;
+  margin-bottom: 3mm;
+}
+.sezione-pagamenti .titolo-sezione {
+  font-size: 10px;
+  font-weight: 900;
+  color: #276749;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  margin-bottom: 2mm;
+  border-bottom: 1px solid #c6f6d5;
+  padding-bottom: 1mm;
+}
+.griglia-pagamenti {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2mm 5mm;
+}
+.campo-pag {
+  display: flex;
+  flex-direction: column;
+  gap: 1mm;
+  font-size: 10px;
+  font-weight: 700;
+}
+.campo-pag .linea {
+  border-bottom: 1.5px solid #555;
+  height: 4.5mm;
+}
+.campo-pag.acconto .linea {
+  border-bottom: 2px solid #276749;
+}
+
+/* ── LIBRI ── */
+.sezione-libri {
+  border: 1px solid #555;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 3mm;
+}
+.classe-header {
+  background: #003399;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 1.5mm 3mm;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.libri-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.libri-table th {
+  background: #e8edf8;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: #003399;
+  padding: 1.5mm 2mm;
+  border-bottom: 1px solid #c6d4f0;
+  text-align: left;
+}
+.libri-table th.centro { text-align: center; }
+.libri-table th.destra { text-align: right; }
+.libri-table td {
+  padding: 1.5mm 2mm;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: middle;
+  font-size: 10px;
+}
+.libri-table tr:last-child td { border-bottom: none; }
+.libri-table td.centro { text-align: center; }
+.libri-table td.destra { text-align: right; font-weight: 700; color: #276749; }
+.quadratino-ordine {
+  width: 5mm; height: 5mm;
+  border: 1.5px solid #555;
+  display: inline-block;
+}
+.col-check { width: 8mm; }
+.col-sezioni { width: 28mm; font-size: 9px; color: #555; }
+.col-isbn { width: 25mm; font-size: 8px; color: #777; font-family: monospace; }
+.col-libro { }
+.col-prezzo { width: 16mm; }
+
+.materia-label {
+  font-size: 8px;
+  color: #718096;
+  display: block;
+}
+.titolo-label {
+  font-weight: 700;
+  font-size: 10px;
+  display: block;
+  line-height: 1.2;
+}
+.autore-label {
+  font-size: 8px;
+  color: #718096;
+  display: block;
+}
+
+/* ── TOTALE ── */
+.riga-totale {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4mm;
+  padding: 2mm 3mm;
+  background: #f0f4ff;
+  border-top: 2px solid #003399;
+  font-size: 11px;
+  font-weight: 900;
+}
+.riga-totale span { color: #003399; }
+.riga-totale .importo { font-size: 13px; color: #276749; }
+
+/* ── NOTE ── */
+.sezione-note {
+  border: 1px solid #aaa;
+  border-radius: 4px;
+  padding: 3mm 4mm;
+  margin-bottom: 3mm;
+}
+.sezione-note .titolo-sezione {
+  font-size: 10px;
+  font-weight: 900;
+  color: #555;
+  text-transform: uppercase;
+  margin-bottom: 2mm;
+}
+.righe-note { display: flex; flex-direction: column; gap: 3mm; }
+.riga-note { border-bottom: 1px solid #ccc; height: 4mm; }
+
+/* ── LOADING ── */
+#loading {
+  text-align: center;
+  padding: 20mm;
+  font-size: 14px;
+  color: #666;
+}
+
+/* ── STAMPA ── */
+@media print {
+  body { background: #fff; }
+  .no-print { display: none !important; }
+  .pagina { padding: 5mm 8mm; }
+  @page { size: A4; margin: 5mm; }
+}
+</style>
+</head>
+<body>
+
+<div class="no-print" style="background:#003399;color:#fff;padding:8px 16px;text-align:center;font-size:13px">
+  <strong>Scheda Raccolta Ordine — Medie Arce</strong>
+  &nbsp;&nbsp;|&nbsp;&nbsp;
+  <button onclick="window.print()" style="background:#fff;color:#003399;border:none;padding:4px 14px;font-weight:700;border-radius:4px;cursor:pointer;font-size:12px">🖨️ Stampa</button>
+</div>
+
+<div id="loading">Caricamento libri in corso…</div>
+<div id="contenuto" style="display:none"></div>
+
+<script>
+const SB_URL = 'https://pzfgidqtxpnghkihwepd.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB6ZmdpZHF0eHBuZ2hraWh3ZXBkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0MjUwNzIsImV4cCI6MjA5ODAwMTA3Mn0.uqwVWngmVdsQyrEF-BKpETA5o8xyMbza8I5lzQWzv8E';
+const sb = supabase.createClient(SB_URL, SB_KEY);
+
+const fmt = v => v != null ? Number(v).toFixed(2).replace('.',',') : '—';
+
+function normalizza(s) {
+  return (s||'').replace(/\s+/g,' ').replace(/["""]/g,'"').trim().toLowerCase();
+}
+
+function eArce(classi) {
+  return (classi||[]).some(c => normalizza(c).includes('arce'));
+}
+
+function classiArce(classi) {
+  return (classi||[]).filter(c => normalizza(c).includes('arce'));
+}
+
+function formattaClassi(classi) {
+  return classiArce(classi).map(c => {
+    // Estrae solo la parte senza "Arce": es. "1A Arce" → "1A", "Media Arce 1A" → "1A"
+    return c.replace(/arce/gi,'').replace(/media/gi,'').replace(/\s+/g,' ').trim();
+  }).join(', ');
+}
+
+function logoHtml() {
+  // Prova con logo.png nella stessa cartella; se non carica mostra placeholder
+  return `<img src="logo.png" alt="Pace e Bene" onerror="this.outerHTML='<div class=\\'no-logo\\'>Logo<br>Pace e Bene<br>Alfa Srl</div>'" style="width:38mm;height:auto">`;
+}
+
+function intestazioneHtml() {
+  return `
+  <div class="intestazione">
+    <div class="logo-wrap">${logoHtml()}</div>
+    <div class="titolo-centro">
+      <h1>Scheda Raccolta Ordine</h1>
+      <h2>Scuola Media — Arce</h2>
+      <div style="margin-top:3mm;font-size:9px;color:#555">Compilare a stampatello — consegnare in libreria</div>
+    </div>
+    <div class="dati-header">
+      <div class="campo-header">Data <div class="linea"></div></div>
+      <div class="foderatura-box">
+        <div class="quadratino"></div>
+        <span>📚 Servizio Foderine</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+function datiAlunnoHtml() {
+  return `
+  <div class="sezione-dati">
+    <div class="titolo-sezione">Dati Alunno</div>
+    <div class="griglia-dati tre-col">
+      <div class="campo-dato">Cognome <div class="linea"></div></div>
+      <div class="campo-dato">Sezione <div class="linea"></div></div>
+      <div class="campo-dato">Cellulare <div class="linea"></div></div>
+      <div class="campo-dato">Nome <div class="linea"></div></div>
+      <div class="campo-dato">Classe <div class="linea"></div></div>
+      <div class="campo-dato">Email <div class="linea"></div></div>
+    </div>
+  </div>`;
+}
+
+function pagamentiHtml() {
+  return `
+  <div class="sezione-pagamenti">
+    <div class="titolo-sezione">Pagamenti</div>
+    <div class="griglia-pagamenti">
+      <div class="campo-pag acconto">
+        <div>Acconto €</div>
+        <div class="linea"></div>
+      </div>
+      <div class="campo-pag">
+        <div>Pagamento 1 €</div>
+        <div class="linea"></div>
+      </div>
+      <div class="campo-pag">
+        <div>Pagamento 2 €</div>
+        <div class="linea"></div>
+      </div>
+      <div class="campo-pag">
+        <div>Pagamento 3 €</div>
+        <div class="linea"></div>
+      </div>
+      <div class="campo-pag">
+        <div>Pagamento 4 €</div>
+        <div class="linea"></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function libriHtml(libri) {
+  // Raggruppa per classe
+  const gruppiMap = {};
+  libri.forEach(b => {
+    const cl = classiArce(b.classi);
+    cl.forEach(c => {
+      const chiave = c;
+      if (!gruppiMap[chiave]) gruppiMap[chiave] = [];
+      if (!gruppiMap[chiave].find(x => x.id === b.id)) gruppiMap[chiave].push(b);
+    });
+  });
+
+  // Ordina le classi
+  const classiOrdinate = Object.keys(gruppiMap).sort((a,b) => a.localeCompare(b, 'it'));
+
+  if (!classiOrdinate.length) {
+    return `<div style="padding:5mm;color:#c00;font-weight:700">Nessun libro trovato per le classi Arce.<br>
+    Verificare che nel catalogo i libri abbiano classi contenenti "Arce".</div>`;
+  }
+
+  let html = '';
+  let totaleGlobale = 0;
+
+  classiOrdinate.forEach(classe => {
+    const bks = gruppiMap[classe].sort((a,b) => (a.sort_order||999) - (b.sort_order||999) || (a.materia||'').localeCompare(b.materia||'','it'));
+    const tot = bks.reduce((s,b) => s + (b.prezzo||0), 0);
+    totaleGlobale += tot;
+
+    html += `
+    <div class="sezione-libri" style="margin-bottom:3mm">
+      <div class="classe-header">Classe ${classe}</div>
+      <table class="libri-table">
+        <thead>
+          <tr>
+            <th class="col-check centro">Ord.</th>
+            <th class="col-isbn">ISBN</th>
+            <th class="col-libro">Libro</th>
+            <th class="col-prezzo destra">Prezzo</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${bks.map(b => `
+          <tr>
+            <td class="centro"><div class="quadratino-ordine"></div></td>
+            <td class="col-isbn">${b.isbn||'—'}</td>
+            <td>
+              <span class="materia-label">${b.materia||''}${b.volume?' · Vol.'+b.volume:''}</span>
+              <span class="titolo-label">${b.titolo||'—'}</span>
+              <span class="autore-label">${[b.autore,b.editore].filter(Boolean).join(' · ')}</span>
+            </td>
+            <td class="destra">€ ${fmt(b.prezzo)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+      <div class="riga-totale">
+        <span>Totale classe ${classe}</span>
+        <span class="importo">€ ${fmt(tot)}</span>
+      </div>
+    </div>`;
+  });
+
+  if (classiOrdinate.length > 1) {
+    html += `<div class="riga-totale" style="background:#003399;color:#fff;border-radius:4px;padding:2mm 3mm">
+      <span style="color:#c6d4f0">TOTALE GENERALE TUTTI I LIBRI</span>
+      <span class="importo" style="color:#fff;font-size:14px">€ ${fmt(totaleGlobale)}</span>
+    </div>`;
+  }
+
+  return html;
+}
+
+async function carica() {
+  const { data, error } = await sb
+    .from('catalogo_libri')
+    .select('*')
+    .eq('tipo_scuola', 'medie')
+    .order('sort_order', { ascending: true, nullsFirst: false })
+    .order('materia');
+
+  if (error) {
+    document.getElementById('loading').innerHTML = `<div style="color:red">Errore caricamento: ${error.message}</div>`;
+    return;
+  }
+
+  // Filtra solo libri con almeno una classe Arce
+  const libri = (data||[]).filter(b => eArce(b.classi));
+
+  document.getElementById('loading').style.display = 'none';
+  const cont = document.getElementById('contenuto');
+  cont.style.display = 'block';
+
+  cont.innerHTML = `
+  <div class="pagina">
+    ${intestazioneHtml()}
+    ${datiAlunnoHtml()}
+    ${pagamentiHtml()}
+    ${libriHtml(libri)}
+    <div class="sezione-note">
+      <div class="titolo-sezione">Note</div>
+      <div class="righe-note">
+        <div class="riga-note"></div>
+        <div class="riga-note"></div>
+      </div>
+    </div>
+    <div style="text-align:center;font-size:8px;color:#999;margin-top:3mm">
+      Libreria Pace e Bene — Alfa Srl &nbsp;·&nbsp; Scheda generata automaticamente dal catalogo
+    </div>
+  </div>`;
+}
+
+carica();
+</script>
+</body>
+</html>
