@@ -2098,19 +2098,17 @@ async function toggleCampiScuola() {
   } else if (tipo === 'superiori') {
     classeSelect.style.display = 'none';
     classeSup.style.display    = 'block';
-    // Popola con classi uniche dal catalogo superiori
-    if (classeSup.options.length <= 1) {
-      const { data } = await sb.from('catalogo_libri')
-        .select('classi').eq('tipo_scuola','superiori');
-      const classiSet = new Set();
-      (data||[]).forEach(r => (r.classi||[]).forEach(c => classiSet.add(c)));
-      const sorted = [...classiSet].sort();
-      sorted.forEach(c => {
-        const o = document.createElement('option');
-        o.value = o.textContent = c;
-        classeSup.appendChild(o);
-      });
-    }
+    // Popola con classi uniche dal catalogo superiori (sempre aggiornato)
+    classeSup.innerHTML = '<option value="">— seleziona classe —</option>';
+    const { data } = await sb.from('catalogo_libri')
+      .select('classi').eq('tipo_scuola','superiori');
+    const classiSet = new Set();
+    (data||[]).forEach(r => (r.classi||[]).forEach(c => classiSet.add(c)));
+    [...classiSet].sort().forEach(c => {
+      const o = document.createElement('option');
+      o.value = o.textContent = c;
+      classeSup.appendChild(o);
+    });
   } else {
     classeSelect.style.display = 'none';
     classeSup.style.display    = 'none';
