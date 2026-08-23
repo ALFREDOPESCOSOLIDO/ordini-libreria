@@ -1066,8 +1066,11 @@ async function onClienteSelezionato() {
     document.getElementById('libri-classe-label').textContent = classe;
     load(true);
     const classeBreve = classe.includes(' — ') ? classe.split(' — ').pop().trim() : classe;
-    // Scarica tutto il catalogo e filtra in JS per gestire variazioni di spazi/virgolette
-    const { data: tuttiLibri } = await sb.from('catalogo_libri').select('*').order('sort_order', { ascending: true, nullsFirst: false });
+    // Scarica catalogo filtrato per tipo scuola e filtra in JS per gestire variazioni di spazi/virgolette
+    let catQuery = sb.from('catalogo_libri').select('*').order('sort_order', { ascending: true, nullsFirst: false });
+    if (tipo === 'medie') catQuery = catQuery.eq('tipo_scuola', 'medie');
+    else if (tipo === 'superiori') catQuery = catQuery.eq('tipo_scuola', 'superiori');
+    const { data: tuttiLibri } = await catQuery;
     const normalizza = s => (s||'').replace(/\s+/g,' ').replace(/["""]/g,'"').trim();
     const classeN = normalizza(classe);
     const classeBreveN = normalizza(classeBreve);
