@@ -2989,7 +2989,7 @@ async function stampaListaPacchi(inputId) {
   // Prendi le righe_ordine collegate per avere info cliente e prezzo
   const rigaIds = [...new Set((rof||[]).map(r => r.riga_ordine_id).filter(Boolean))];
   const { data: righe } = await sb.from('righe_ordine')
-    .select('id,isbn,titolo,autore,editore,prezzo_unitario,quantita_consegnata,ordini(clienti(id,nome,cognome,classe,scuola))')
+    .select('id,isbn,titolo,autore,editore,prezzo_unitario,quantita_consegnata,ordini(servizio_foderatura,clienti(id,nome,cognome,classe,telefono))')
     .in('id', rigaIds);
   load(false);
 
@@ -3034,10 +3034,19 @@ async function stampaListaPacchi(inputId) {
       <div style="page-break-inside:avoid;margin-bottom:24px;border:2px solid #1a3a5c;border-radius:6px;overflow:hidden;display:flex">
         <!-- Intestazione verticale sinistra -->
         <div style="background:#1a3a5c;color:#fff;flex-shrink:0;display:flex;align-items:stretch;justify-content:center;width:90px;position:relative;overflow:hidden">
-          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-90deg);white-space:nowrap;text-align:center;line-height:1.15">
-            <div style="font-size:24px;font-weight:900;letter-spacing:1px">${(cliente?.cognome||'').toUpperCase()}</div>
-            <div style="font-size:24px;font-weight:900;letter-spacing:1px">${(cliente?.nome||'').toUpperCase()}</div>
-            ${cliente?.classe ? `<div style="font-size:13px;font-weight:600;opacity:.85;margin-top:2px">${cliente.classe}</div>` : ''}
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-90deg);white-space:nowrap;text-align:center;line-height:1.2">
+            ${(()=>{
+              const cog = (cliente?.cognome||'').toUpperCase();
+              const nom = (cliente?.nome||'').toUpperCase();
+              const maxLen = Math.max(cog.length, nom.length);
+              const fs = maxLen > 14 ? '15px' : maxLen > 11 ? '19px' : '24px';
+              const fod = libri[0]?.ordini?.servizio_foderatura;
+              return `<div style="font-size:${fs};font-weight:900;letter-spacing:1px">${cog}</div>
+              <div style="font-size:${fs};font-weight:900;letter-spacing:1px">${nom}</div>
+              ${cliente?.classe ? `<div style="font-size:11px;font-weight:600;opacity:.85;margin-top:2px">${cliente.classe}</div>` : ''}
+              ${cliente?.telefono ? `<div style="font-size:10px;opacity:.8;margin-top:1px">📱 ${cliente.telefono}</div>` : ''}
+              ${fod ? `<div style="font-size:10px;font-weight:700;margin-top:2px;background:#553c9a;padding:1px 4px;border-radius:3px">📚 FODERINE</div>` : ''}`;
+            })()}
           </div>
         </div>
         <!-- Contenuto libri -->
