@@ -3019,8 +3019,6 @@ async function stampaListaPacchi(inputId) {
 
   const righeHtml = clientiOrdinati.map(({ cliente, libri }) => {
     const nome = cliente ? `${(cliente.cognome||'').toUpperCase()} ${cliente.nome||''}`.trim() : 'CLIENTE SCONOSCIUTO';
-    const classe = cliente?.classe ? ` — ${cliente.classe}` : '';
-    const scuola = cliente?.scuola ? ` (${cliente.scuola})` : '';
     const totale = libri.reduce((s,l) => s + (l.prezzo_unitario||0) * l.disp, 0);
     const libriRows = libri.map(l => `
       <tr>
