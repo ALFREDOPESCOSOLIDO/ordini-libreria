@@ -1074,10 +1074,24 @@ async function onClienteSelezionato() {
     const normalizza = s => (s||'').replace(/\s+/g,' ').replace(/["""]/g,'"').trim();
     const classeN = normalizza(classe);
     const classeBreveN = normalizza(classeBreve);
+    const classeHaScuola = classe.includes(' — ') || classe.includes(' - ');
     let data = (tuttiLibri||[]).filter(b =>
       (b.classi||[]).some(c => {
         const cn = normalizza(c);
-        return cn === classeN || cn === classeBreveN || cn.endsWith(' — ' + classeBreveN) || cn.endsWith(' - ' + classeBreveN);
+        if (cn === classeN) return true;
+        // Match su classeBreve solo se la classe del cliente non ha già la scuola incorporata
+        if (!classeHaScuola && cn === classeBreveN) return true;
+        // Match su classi nel catalogo che terminano con " — sezione" (stesso formato del cliente)
+        if (cn.endsWith(' — ' + classeBreveN) || cn.endsWith(' - ' + classeBreveN)) {
+          // Verifica che la scuola nel catalogo coincida con quella del cliente
+          if (classeHaScuola) {
+            const scuolaCat = cn.replace(/ [—-] \S+$/, '').trim();
+            const scuolaCliente = classeN.replace(/ [—-] \S+$/, '').trim();
+            return scuolaCat === scuolaCliente;
+          }
+          return true;
+        }
+        return false;
       })
     );
     load(false);
