@@ -3043,21 +3043,24 @@ async function stampaListaPacchi(inputId) {
         <td style="padding:5px 8px;text-align:right;font-size:13px;font-weight:bold">€ ${((l.prezzo_unitario||0)*l.disp).toFixed(2).replace('.',',')}</td>
       </tr>`).join('');
     return `
-      <div style="page-break-inside:avoid;margin-bottom:24px;border:2px solid #1a3a5c;border-radius:6px;overflow:hidden;display:flex">
+      ${(()=>{
+        const cog = (cliente?.cognome||'').toUpperCase();
+        const nom = (cliente?.nome||'').toUpperCase();
+        const maxLen = Math.max(cog.length, nom.length);
+        const fsNum = maxLen > 14 ? 15 : maxLen > 11 ? 19 : 24;
+        const fs = fsNum + 'px';
+        const fod = libri[0]?.ordini?.servizio_foderatura;
+        // Altezza minima = (lunghezza cog + lunghezza nom) * fs * 0.65 + extra per telefono/foderine/padding
+        const totChars = (cog.length + nom.length);
+        const minH = Math.max(160, Math.round(totChars * fsNum * 0.62) + (cliente?.telefono ? 20 : 0) + (fod ? 20 : 0) + 30);
+        return `<div style="page-break-inside:avoid;margin-bottom:24px;border:2px solid #1a3a5c;border-radius:6px;overflow:hidden;display:flex;min-height:${minH}px">
         <!-- Intestazione verticale sinistra -->
-        <div style="background:#1a3a5c;color:#fff;flex-shrink:0;display:flex;align-items:stretch;justify-content:center;width:90px;position:relative;overflow:hidden">
+        <div style="background:#1a3a5c;color:#fff;flex-shrink:0;display:flex;align-items:stretch;justify-content:center;width:90px;position:relative;overflow:visible">
           <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-90deg);white-space:nowrap;text-align:center;line-height:1.2">
-            ${(()=>{
-              const cog = (cliente?.cognome||'').toUpperCase();
-              const nom = (cliente?.nome||'').toUpperCase();
-              const maxLen = Math.max(cog.length, nom.length);
-              const fs = maxLen > 14 ? '15px' : maxLen > 11 ? '19px' : '24px';
-              const fod = libri[0]?.ordini?.servizio_foderatura;
-              return `<div style="font-size:${fs};font-weight:900;letter-spacing:1px">${cog}</div>
-              <div style="font-size:${fs};font-weight:900;letter-spacing:1px">${nom}</div>
-              ${cliente?.telefono ? `<div style="font-size:10px;opacity:.8;margin-top:1px">📱 ${cliente.telefono}</div>` : ''}
-              ${fod ? `<div style="font-size:10px;font-weight:700;margin-top:2px;background:#553c9a;padding:1px 4px;border-radius:3px">📚 FODERINE</div>` : ''}`;
-            })()}
+            <div style="font-size:${fs};font-weight:900;letter-spacing:1px">${cog}</div>
+            <div style="font-size:${fs};font-weight:900;letter-spacing:1px">${nom}</div>
+            ${cliente?.telefono ? `<div style="font-size:10px;opacity:.8;margin-top:2px">📱 ${cliente.telefono}</div>` : ''}
+            ${fod ? `<div style="font-size:10px;font-weight:700;margin-top:3px;background:#553c9a;padding:1px 4px;border-radius:3px">📚 FODERINE</div>` : ''}
           </div>
         </div>
         <!-- Contenuto libri -->
