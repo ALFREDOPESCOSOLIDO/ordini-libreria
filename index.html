@@ -1457,34 +1457,89 @@ async function cercaIsbnClienti(isbn) {
   const el = document.getElementById('isbn-lookup-result');
   isbn = (isbn||'').trim();
   if (isbn.length < 5) { el.innerHTML=''; return; }
-  const { data } = await sb.from('righe_ordine')
-    .select('titolo,quantita,quantita_consegnata,ordini(data_ordine,stato,clienti(nome,cognome,classe,scuola))')
-    .ilike('isbn', isbn)
-    .neq('quantita_consegnata', null);
-  const attivi = (data||[]).filter(r => (r.quantita_consegnata||0) < r.quantita);
-  const consegnati = (data||[]).filter(r => (r.quantita_consegnata||0) >= r.quantita);
-  if (!(data||[]).length) { el.innerHTML='<div class="alert alert-warning">Nessun ordine trovato per questo ISBN.</div>'; return; }
-  let html = '';
-  if (attivi.length) {
-    html += `<div style="font-weight:700;color:#276749;margin-bottom:.5rem">📦 In attesa di consegna (${attivi.length})</div>`;
-    html += attivi.map(r=>{
-      const c=r.ordini?.clienti;
-      const classe=c?.classe?` — Classe ${c.classe}`:'';
-      const scuola=c?.scuola?` (${c.scuola})`:'';
-      return `<div class="isbn-result" style="margin-bottom:.4rem">
-        <div class="isbn-cliente">${nomeC(c)}${classe}${scuola}</div>
-        <div class="text-muted text-sm">${r.titolo} · Ord. ${fmtDate(r.ordini?.data_ordine)} · ${badgeOrdine(r.ordini?.stato)}</div>
-      </div>`;
-    }).join('');
+  load(true);
+
+  const [{ data: roAll }, { data: rofAll }] = await Promise.all([
+    sb.from('righe_ordine')
+      .select('titolo,quantita,quantita_arrivata,quantita_consegnata,ordini(data_ordine,stato,clienti(nome,cognome,classe))')
+      .ilike('isbn', isbn),
+    sb.from('righe_ordine_fornitore')
+      .select('quantita,quantita_arrivata,data_arrivo,ordine_fornitore_id')
+      .eq('isbn', isbn),
+  ]);
+
+  // recupera ordini fornitore per la data ordine
+  let ofMap = {};
+  const ofIds = [...new Set((rofAll||[]).map(r => r.ordine_fornitore_id).filter(Boolean))];
+  if (ofIds.length) {
+    const { data: ofs } = await sb.from('ordini_fornitore')
+      .select('id,data_ordine,fornitori(nome)').in('id', ofIds);
+    (ofs||[]).forEach(o => { ofMap[o.id] = o; });
   }
-  if (consegnati.length) {
-    html += `<div style="font-weight:700;color:#718096;margin:.5rem 0 .25rem">✓ Già consegnati (${consegnati.length})</div>`;
-    html += consegnati.map(r=>{
-      const c=r.ordini?.clienti;
-      return `<div style="padding:.3rem 0;font-size:.85rem;color:#718096">${nomeC(c)} — ${r.titolo}</div>`;
-    }).join('');
+  load(false);
+
+  if (!(roAll||[]).length && !(rofAll||[]).length) {
+    el.innerHTML='<div class="alert alert-warning">Nessun ordine trovato per questo ISBN.</div>';
+    return;
   }
-  el.innerHTML = html;
+
+  // — Sezione ordini clienti —
+  const clientiHtml = (roAll||[]).length ? `
+    <table style="width:100%;border-collapse:collapse;font-size:.83rem">
+      <thead><tr style="background:#edf2f7">
+        <th style="padding:5px 6px;text-align:left;font-size:.73rem">Data ord.</th>
+        <th style="padding:5px 6px;text-align:left;font-size:.73rem">Cliente</th>
+        <th style="padding:5px 6px;text-align:left;font-size:.73rem">Classe</th>
+        <th style="padding:5px 6px;text-align:center;font-size:.73rem">Qtà</th>
+        <th style="padding:5px 6px;text-align:center;font-size:.73rem">Arr.</th>
+        <th style="padding:5px 6px;text-align:center;font-size:.73rem">Cons.</th>
+        <th style="padding:5px 6px;font-size:.73rem">Stato</th>
+      </tr></thead>
+      <tbody>${(roAll||[]).sort((a,b)=>(a.ordini?.clienti?.cognome||'').localeCompare(b.ordini?.clienti?.cognome||'','it')).map((r,i)=>{
+        const c = r.ordini?.clienti;
+        const cons = r.quantita_consegnata||0;
+        const arr = r.quantita_arrivata||0;
+        return `<tr style="background:${i%2?'#f9fafb':'#fff'}">
+          <td style="padding:5px 6px">${fmtDate(r.ordini?.data_ordine)}</td>
+          <td style="padding:5px 6px;font-weight:600">${nomeC(c)||'—'}</td>
+          <td style="padding:5px 6px;color:#718096">${c?.classe||'—'}</td>
+          <td style="padding:5px 6px;text-align:center">${r.quantita}</td>
+          <td style="padding:5px 6px;text-align:center;color:${arr>0?'#276749':'#718096'}">${arr}</td>
+          <td style="padding:5px 6px;text-align:center;font-weight:700;color:${cons>=r.quantita?'#276749':'#c53030'}">${cons}</td>
+          <td style="padding:5px 6px">${badgeOrdine(r.ordini?.stato)}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>` : '<p class="text-muted text-sm" style="margin:.25rem 0">Nessun ordine cliente.</p>';
+
+  // — Sezione ordini fornitore —
+  const fornHtml = (rofAll||[]).length ? `
+    <table style="width:100%;border-collapse:collapse;font-size:.83rem;margin-top:.25rem">
+      <thead><tr style="background:#edf2f7">
+        <th style="padding:5px 6px;text-align:left;font-size:.73rem">Fornitore</th>
+        <th style="padding:5px 6px;text-align:left;font-size:.73rem">Data ordine</th>
+        <th style="padding:5px 6px;text-align:center;font-size:.73rem">Qtà ord.</th>
+        <th style="padding:5px 6px;text-align:center;font-size:.73rem">Arrivati</th>
+        <th style="padding:5px 6px;text-align:left;font-size:.73rem">Data arrivo</th>
+      </tr></thead>
+      <tbody>${(rofAll||[]).map((r,i)=>{
+        const of = ofMap[r.ordine_fornitore_id]||{};
+        return `<tr style="background:${i%2?'#f9fafb':'#fff'}">
+          <td style="padding:5px 6px;font-weight:600">${of.fornitori?.nome||'—'}</td>
+          <td style="padding:5px 6px">${fmtDate(of.data_ordine)}</td>
+          <td style="padding:5px 6px;text-align:center">${r.quantita}</td>
+          <td style="padding:5px 6px;text-align:center;font-weight:700;color:${(r.quantita_arrivata||0)>0?'#276749':'#718096'}">${r.quantita_arrivata||0}</td>
+          <td style="padding:5px 6px;color:${r.data_arrivo?'#276749':'#718096'}">${r.data_arrivo?fmtDate(r.data_arrivo):'—'}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>` : '<p class="text-muted text-sm" style="margin:.25rem 0">Nessun ordine fornitore.</p>';
+
+  el.innerHTML = `
+    <div style="margin-top:.5rem">
+      <div style="font-weight:700;font-size:.85rem;color:#2b6cb0;margin-bottom:.35rem">👥 Ordini clienti (${(roAll||[]).length})</div>
+      ${clientiHtml}
+      <div style="font-weight:700;font-size:.85rem;color:#276749;margin:.75rem 0 .35rem">🏭 Ordini fornitore (${(rofAll||[]).length})</div>
+      ${fornHtml}
+    </div>`;
 }
 
 // ── Ricerca ISBN in form arrivo fornitore ─────────────
