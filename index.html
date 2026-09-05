@@ -3148,6 +3148,10 @@ async function loadElencoCarichi() {
       <td style="padding:6px 8px;text-align:center">${r.quantita}</td>
       <td style="padding:6px 8px;text-align:center;font-weight:700;color:#276749">${r.quantita_arrivata||0}</td>
       <td style="padding:6px 8px;text-align:center;color:${r.quantita>(r.quantita_arrivata||0)?'#c53030':'#718096'}">${r.quantita-(r.quantita_arrivata||0)||'✓'}</td>
+      <td style="padding:6px 8px;text-align:center;white-space:nowrap">
+        <button class="btn btn-secondary btn-sm" onclick="modificaCarico('${r.id}','${r.riga_ordine_id||''}',${r.quantita_arrivata||0},${r.quantita})" style="font-size:.72rem;padding:.2rem .5rem">✏️ Modifica</button>
+        <button class="btn btn-sm" onclick="annullaCarico('${r.id}','${r.riga_ordine_id||''}')" style="font-size:.72rem;padding:.2rem .5rem;background:#fed7d7;color:#c53030;border:1px solid #fc8181">✕ Annulla</button>
+      </td>
     </tr>`).join('');
     return `<div class="section-card" style="margin-bottom:1rem">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;flex-wrap:wrap;gap:.5rem">
@@ -3166,11 +3170,34 @@ async function loadElencoCarichi() {
           <th style="padding:7px 8px;font-size:.75rem;text-align:center">Ord.</th>
           <th style="padding:7px 8px;font-size:.75rem;text-align:center;color:#276749">Arr.</th>
           <th style="padding:7px 8px;font-size:.75rem;text-align:center;color:#c53030">Manc.</th>
+          <th style="padding:7px 8px;font-size:.75rem;text-align:center">Azioni</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
   }).join('');
+}
+
+// ── Modifica / Annulla carico ─────────────────────────
+async function modificaCarico(rofId, roId, attuale, maxOrd) {
+  const nuova = prompt(`Quantità arrivata attuale: ${attuale}\nMax ordinato: ${maxOrd}\nInserisci nuova quantità arrivata (0 = annulla carico):`, attuale);
+  if (nuova === null) return;
+  const n = parseInt(nuova);
+  if (isNaN(n) || n < 0 || n > maxOrd) { alert(`Valore non valido. Deve essere tra 0 e ${maxOrd}.`); return; }
+  load(true);
+  await sb.from('righe_ordine_fornitore').update({ quantita_arrivata: n, data_arrivo: n > 0 ? today() : null }).eq('id', rofId);
+  if (roId) await sb.from('righe_ordine').update({ quantita_arrivata: n }).eq('id', roId);
+  load(false);
+  await loadElencoCarichi();
+}
+
+async function annullaCarico(rofId, roId) {
+  if (!confirm('Annullare questo carico? La quantità arrivata verrà azzerata.')) return;
+  load(true);
+  await sb.from('righe_ordine_fornitore').update({ quantita_arrivata: 0, data_arrivo: null }).eq('id', rofId);
+  if (roId) await sb.from('righe_ordine').update({ quantita_arrivata: 0 }).eq('id', roId);
+  load(false);
+  await loadElencoCarichi();
 }
 
 // ── Cerca ISBN — storia completa ──────────────────────
