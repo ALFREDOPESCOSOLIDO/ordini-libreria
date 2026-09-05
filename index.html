@@ -3122,7 +3122,9 @@ async function loadElencoCarichi() {
   const ofIds = (ofs||[]).map(o => o.id);
   if (!ofIds.length) { el.innerHTML = '<div class="section-card text-muted">Nessun ordine fornitore presente.</div>'; load(false); return; }
 
-  const { data: righe } = await sb.from('righe_ordine_fornitore').select('*').in('ordine_fornitore_id', ofIds).gt('quantita_arrivata', 0);
+  const { data: righe } = await sb.from('righe_ordine_fornitore')
+    .select('*,righe_ordine(id,ordini(clienti(nome,cognome)))')
+    .in('ordine_fornitore_id', ofIds).gt('quantita_arrivata', 0);
   load(false);
 
   if (!(righe||[]).length) { el.innerHTML = '<div class="section-card text-muted">Nessun carico registrato.</div>'; return; }
@@ -3141,18 +3143,23 @@ async function loadElencoCarichi() {
     const nomeF = of.fornitori?.nome || of.fornitore || '—';
     const totOrd = rr.reduce((s,r) => s + r.quantita, 0);
     const totArr = rr.reduce((s,r) => s + (r.quantita_arrivata||0), 0);
-    const rows = rr.map((r,i) => `<tr style="background:${i%2?'#f9fafb':'#fff'}">
-      <td style="padding:6px 8px;font-family:monospace;font-size:.78rem">${r.isbn||'—'}</td>
-      <td style="padding:6px 8px;font-size:.85rem">${r.titolo||'—'}</td>
-      <td style="padding:6px 8px;font-size:.85rem">${r.editore||'—'}</td>
-      <td style="padding:6px 8px;text-align:center">${r.quantita}</td>
-      <td style="padding:6px 8px;text-align:center;font-weight:700;color:#276749">${r.quantita_arrivata||0}</td>
-      <td style="padding:6px 8px;text-align:center;color:${r.quantita>(r.quantita_arrivata||0)?'#c53030':'#718096'}">${r.quantita-(r.quantita_arrivata||0)||'✓'}</td>
-      <td style="padding:6px 8px;text-align:center;white-space:nowrap">
-        <button class="btn btn-secondary btn-sm" onclick="modificaCarico('${r.id}','${r.riga_ordine_id||''}',${r.quantita_arrivata||0},${r.quantita})" style="font-size:.72rem;padding:.2rem .5rem">✏️ Modifica</button>
-        <button class="btn btn-sm" onclick="annullaCarico('${r.id}','${r.riga_ordine_id||''}')" style="font-size:.72rem;padding:.2rem .5rem;background:#fed7d7;color:#c53030;border:1px solid #fc8181">✕ Annulla</button>
-      </td>
-    </tr>`).join('');
+    const rows = rr.map((r,i) => {
+      const cliente = r.righe_ordine?.ordini?.clienti;
+      const nomeCliente = cliente ? nomeC(cliente) : '—';
+      return `<tr style="background:${i%2?'#f9fafb':'#fff'}">
+        <td style="padding:6px 8px;font-family:monospace;font-size:.78rem">${r.isbn||'—'}</td>
+        <td style="padding:6px 8px;font-size:.85rem">${r.titolo||'—'}<br><span style="font-size:.75rem;color:#718096">${r.editore||''}</span></td>
+        <td style="padding:6px 8px;font-size:.83rem;font-weight:600;color:#2b6cb0">${nomeCliente}</td>
+        <td style="padding:6px 8px;text-align:center;font-size:.8rem;color:#718096">${fmtDate(r.data_arrivo)||'—'}</td>
+        <td style="padding:6px 8px;text-align:center">${r.quantita}</td>
+        <td style="padding:6px 8px;text-align:center;font-weight:700;color:#276749">${r.quantita_arrivata||0}</td>
+        <td style="padding:6px 8px;text-align:center;color:${r.quantita>(r.quantita_arrivata||0)?'#c53030':'#718096'}">${r.quantita-(r.quantita_arrivata||0)||'✓'}</td>
+        <td style="padding:6px 8px;text-align:center;white-space:nowrap">
+          <button class="btn btn-secondary btn-sm" onclick="modificaCarico('${r.id}','${r.riga_ordine_id||''}',${r.quantita_arrivata||0},${r.quantita})" style="font-size:.72rem;padding:.2rem .5rem">✏️ Modifica</button>
+          <button class="btn btn-sm" onclick="annullaCarico('${r.id}','${r.riga_ordine_id||''}')" style="font-size:.72rem;padding:.2rem .5rem;background:#fed7d7;color:#c53030;border:1px solid #fc8181">✕ Annulla</button>
+        </td>
+      </tr>`;
+    }).join('');
     return `<div class="section-card" style="margin-bottom:1rem">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;flex-wrap:wrap;gap:.5rem">
         <div><strong style="font-size:1rem">${nomeF}</strong>
@@ -3166,7 +3173,8 @@ async function loadElencoCarichi() {
         <thead><tr style="background:#edf2f7">
           <th style="padding:7px 8px;font-size:.75rem;text-align:left">ISBN</th>
           <th style="padding:7px 8px;font-size:.75rem;text-align:left">Titolo</th>
-          <th style="padding:7px 8px;font-size:.75rem;text-align:left">Editore</th>
+          <th style="padding:7px 8px;font-size:.75rem;text-align:left;color:#2b6cb0">Cliente</th>
+          <th style="padding:7px 8px;font-size:.75rem;text-align:center">Data arr.</th>
           <th style="padding:7px 8px;font-size:.75rem;text-align:center">Ord.</th>
           <th style="padding:7px 8px;font-size:.75rem;text-align:center;color:#276749">Arr.</th>
           <th style="padding:7px 8px;font-size:.75rem;text-align:center;color:#c53030">Manc.</th>
