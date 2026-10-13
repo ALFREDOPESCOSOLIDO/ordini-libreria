@@ -149,15 +149,26 @@
 
     /* ── Stampa report da consegnare ── */
     @media print {
+      @page { size: A4 portrait; margin: 8mm 10mm; }
       /* Nascondi tutto tranne il contenuto della pagina report */
       .sidebar, .top-bar, .header-bar, #rc-sommario { display: none !important; }
-      .main-content { margin-left: 0 !important; padding: 0 !important; }
+      .main-content { margin-left: 0 !important; padding: 0 !important; width: 100% !important; }
       .page { display: none !important; }
-      #page-report-consegne { display: block !important; padding: 0 !important; }
-      /* Sommario compatto inline */
+      #page-report-consegne { display: block !important; padding: 0 !important; width: 100% !important; }
       #rc-intestazione-print { display: flex !important; }
-      body { background: #fff; font-size: 10px; }
-      @page { size: A4; margin: 10mm; }
+      /* Tabella compatta */
+      #rc-risultato table { font-size: 8.5px !important; }
+      #rc-risultato thead th { font-size: 7.5px !important; padding: 3px 5px !important; }
+      #rc-risultato tbody td { padding: 3px 5px !important; word-break: break-word; }
+      #rc-risultato tbody td strong { font-size: 8.5px !important; }
+      #rc-risultato tbody td span { font-size: 7.5px !important; }
+      /* Badge clienti più piccoli */
+      #rc-risultato span[style*="border-radius:3px"] { font-size: 7.5px !important; padding: 1px 3px !important; margin: 1px 1px 1px 0 !important; }
+      /* Evita interruzioni di pagina dentro le righe */
+      #rc-risultato tbody tr { page-break-inside: avoid; }
+      /* Sezione note/data */
+      #rc-risultato > div:last-child { font-size: 7px !important; }
+      body { background: #fff; }
       button { display: none !important; }
     }
   </style>
