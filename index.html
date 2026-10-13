@@ -195,6 +195,7 @@
     <a id="nav-carico-merce"  onclick="navTo('carico-merce')">📦 Carico merce</a>
     <a id="nav-elenco-carichi" onclick="navTo('elenco-carichi')">📋 Elenco carichi</a>
     <a id="nav-cerca-isbn"  onclick="navTo('cerca-isbn')">🔍 Cerca ISBN</a>
+    <a id="nav-report-consegne" onclick="navTo('report-consegne')">📋 Report da consegnare</a>
     <div class="sidebar-section">Stampe</div>
     <a href="scheda-ordine-medie-arce.html" target="_blank">📝 Scheda ordine Medie Arce</a>
     <a href="esporta-contatti.html" target="_blank">📤 Esporta contatti Google</a>
@@ -859,6 +860,15 @@
     </div>
 
     <!-- ══ CERCA ISBN ══════════════════════════════════════ -->
+    <div id="page-report-consegne" class="page">
+      <div class="header-bar">
+        <div class="page-title">📋 Report da consegnare</div>
+        <button class="btn btn-secondary" onclick="window.print()">🖨️ Stampa / PDF</button>
+      </div>
+      <div id="rc-sommario" style="display:flex;gap:1rem;margin-bottom:1rem"></div>
+      <div id="rc-risultato"></div>
+    </div>
+
     <div id="page-cerca-isbn" class="page">
       <div class="header-bar">
         <div class="page-title">🔍 Cerca ISBN</div>
@@ -951,7 +961,7 @@ function navTo(name) {
   if (pg)  pg.classList.add('active');
   if (nav) nav.classList.add('active');
   if (name === 'importa-pdf') resetImportaPdf();
-  const loaders = { dashboard: loadDashboard, ordini: loadOrdini, clienti: loadClienti, 'ord-forn': loadOrdForn, catalogo: loadCatalogo, fornitori: loadFornitori, 'elenco-carichi': loadElencoCarichi };
+  const loaders = { dashboard: loadDashboard, ordini: loadOrdini, clienti: loadClienti, 'ord-forn': loadOrdForn, catalogo: loadCatalogo, fornitori: loadFornitori, 'elenco-carichi': loadElencoCarichi, 'report-consegne': loadReportConsegne };
   if (name === 'carico-merce') { const el = document.getElementById('cm-data-stampa'); if (el && !el.value) el.value = today(); }
   if (name === 'elenco-carichi') { const el = document.getElementById('ec-data-stampa'); if (el && !el.value) el.value = today(); }
   if (loaders[name]) loaders[name]();
@@ -3381,6 +3391,94 @@ async function _caricaIsbnCompleto(isbn) {
         <span class="text-muted text-sm">Tot. ${totFornOrd} ord. · ${totFornArr} arr.</span>
       </div>
       ${righeFornHtml}
+    </div>`;
+}
+
+// ── Report da consegnare ──────────────────────────────
+async function loadReportConsegne() {
+  const elRis = document.getElementById('rc-risultato');
+  const elSom = document.getElementById('rc-sommario');
+  elRis.innerHTML = '<div class="text-muted text-sm" style="padding:.5rem">Caricamento…</div>';
+  elSom.innerHTML = '';
+  load(true);
+
+  const { data: righe, error } = await sb
+    .from('righe_ordine')
+    .select('isbn,titolo,editore,quantita,quantita_consegnata,ordini!inner(stato,clienti(nome,cognome))')
+    .neq('ordini.stato', 'annullato');
+  load(false);
+
+  if (error) { elRis.innerHTML = `<div class="alert alert-danger">Errore: ${error.message}</div>`; return; }
+
+  // Filtra non ancora consegnati
+  const daCons = (righe||[]).filter(r => (r.quantita_consegnata||0) < r.quantita);
+
+  if (!daCons.length) {
+    elRis.innerHTML = '<div class="alert alert-success">✓ Nessun libro da consegnare.</div>';
+    return;
+  }
+
+  // Raggruppa per isbn (o titolo se isbn mancante)
+  const gruppi = {};
+  daCons.forEach(r => {
+    const key = r.isbn || r.titolo;
+    if (!gruppi[key]) gruppi[key] = { isbn: r.isbn, titolo: r.titolo, editore: r.editore, totale: 0, clienti: [] };
+    const mancanti = r.quantita - (r.quantita_consegnata||0);
+    gruppi[key].totale += mancanti;
+    const c = r.ordini?.clienti;
+    if (c) gruppi[key].clienti.push({ nome: nomeC(c), qty: mancanti });
+  });
+
+  const lista = Object.values(gruppi).sort((a,b) => (a.titolo||'').localeCompare(b.titolo||'','it'));
+  const totCopie = lista.reduce((s,g) => s + g.totale, 0);
+  const tuttiClienti = new Set(daCons.map(r => r.ordini?.clienti?.cognome).filter(Boolean));
+
+  // Sommario
+  elSom.innerHTML = `
+    <div class="section-card" style="flex:1;text-align:center;padding:.75rem">
+      <div style="font-size:1.8rem;font-weight:900;color:#1a3a5c">${lista.length}</div>
+      <div class="text-muted text-sm">Titoli</div>
+    </div>
+    <div class="section-card" style="flex:1;text-align:center;padding:.75rem">
+      <div style="font-size:1.8rem;font-weight:900;color:#276749">${totCopie}</div>
+      <div class="text-muted text-sm">Copie totali</div>
+    </div>
+    <div class="section-card" style="flex:1;text-align:center;padding:.75rem">
+      <div style="font-size:1.8rem;font-weight:900;color:#553c9a">${tuttiClienti.size}</div>
+      <div class="text-muted text-sm">Clienti coinvolti</div>
+    </div>`;
+
+  // Tabella
+  const thS = 'padding:7px 8px;font-size:.72rem;font-weight:700;text-transform:uppercase;color:#4a5568;text-align:left;background:#edf2f7;border-bottom:2px solid #cbd5e0';
+  const tdS = 'padding:6px 8px;vertical-align:top;border-bottom:1px solid #e2e8f0';
+
+  elRis.innerHTML = `
+    <div class="section-card" style="padding:0;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr>
+          <th style="${thS};width:120px">ISBN</th>
+          <th style="${thS}">Titolo / Editore</th>
+          <th style="${thS};width:60px;text-align:center">Copie</th>
+          <th style="${thS}">Clienti</th>
+        </tr></thead>
+        <tbody>
+          ${lista.map((g,i) => {
+            const clientiHtml = g.clienti
+              .sort((a,b) => a.nome.localeCompare(b.nome,'it'))
+              .map(c => `<span style="display:inline-block;background:#e8f0fe;color:#1a3a5c;border-radius:3px;padding:1px 5px;margin:1px 2px 1px 0;font-size:.78rem;font-weight:600">${c.nome}${c.qty>1?` <span style="color:#553c9a;font-size:.7rem">(×${c.qty})</span>`:''}</span>`)
+              .join('');
+            return `<tr style="background:${i%2?'#f9fafb':'#fff'}">
+              <td style="${tdS};font-family:monospace;font-size:.75rem;color:#718096">${g.isbn||'—'}</td>
+              <td style="${tdS}"><strong style="font-size:.9rem">${g.titolo||'—'}</strong><br><span class="text-muted text-sm">${g.editore||''}</span></td>
+              <td style="${tdS};text-align:center;font-size:1.2rem;font-weight:900;color:#1a3a5c">${g.totale}</td>
+              <td style="${tdS}">${clientiHtml}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="text-muted text-sm" style="margin-top:.5rem;text-align:right">
+      Generato il ${new Date().toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}
     </div>`;
 }
 </script>
