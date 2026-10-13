@@ -3404,17 +3404,17 @@ async function loadReportConsegne() {
 
   const { data: righe, error } = await sb
     .from('righe_ordine')
-    .select('isbn,titolo,editore,quantita,quantita_consegnata,ordini!inner(stato,clienti(nome,cognome))')
+    .select('isbn,titolo,editore,quantita,quantita_arrivata,quantita_consegnata,ordini!inner(stato,clienti(nome,cognome))')
     .neq('ordini.stato', 'annullato');
   load(false);
 
   if (error) { elRis.innerHTML = `<div class="alert alert-danger">Errore: ${error.message}</div>`; return; }
 
-  // Filtra non ancora consegnati
-  const daCons = (righe||[]).filter(r => (r.quantita_consegnata||0) < r.quantita);
+  // Filtra non ancora arrivati dal fornitore
+  const daCons = (righe||[]).filter(r => (r.quantita_arrivata||0) < r.quantita);
 
   if (!daCons.length) {
-    elRis.innerHTML = '<div class="alert alert-success">✓ Nessun libro da consegnare.</div>';
+    elRis.innerHTML = '<div class="alert alert-success">✓ Tutti i libri ordinati sono già arrivati.</div>';
     return;
   }
 
