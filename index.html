@@ -146,6 +146,20 @@
     /* ISBN scan result */
     .isbn-result { background: #ebf8ff; border: 1px solid #bee3f8; border-radius: 8px; padding: .75rem 1rem; margin-top: .5rem; }
     .isbn-result .isbn-cliente { font-weight: 700; color: #2b6cb0; }
+
+    /* ── Stampa report da consegnare ── */
+    @media print {
+      /* Nascondi tutto tranne il contenuto della pagina report */
+      .sidebar, .top-bar, .header-bar, #rc-sommario { display: none !important; }
+      .main-content { margin-left: 0 !important; padding: 0 !important; }
+      .page { display: none !important; }
+      #page-report-consegne { display: block !important; padding: 0 !important; }
+      /* Sommario compatto inline */
+      #rc-intestazione-print { display: flex !important; }
+      body { background: #fff; font-size: 10px; }
+      @page { size: A4; margin: 10mm; }
+      button { display: none !important; }
+    }
   </style>
 </head>
 <body>
@@ -864,6 +878,14 @@
       <div class="header-bar">
         <div class="page-title">📋 Report da consegnare</div>
         <button class="btn btn-secondary" onclick="window.print()">🖨️ Stampa / PDF</button>
+      </div>
+      <!-- Intestazione compatta visibile solo in stampa -->
+      <div id="rc-intestazione-print" style="display:none;align-items:center;gap:8mm;border-bottom:2px solid #1a3a5c;padding-bottom:3mm;margin-bottom:4mm">
+        <img src="Logo.png" style="width:25mm;height:auto" onerror="this.style.display='none'">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:900;color:#1a3a5c">Libreria Pace e Bene — Alfa Srl</div>
+          <div id="rc-print-sub" style="font-size:9px;color:#666;margin-top:1mm"></div>
+        </div>
       </div>
       <div id="rc-sommario" style="display:flex;gap:1rem;margin-bottom:1rem"></div>
       <div id="rc-risultato"></div>
@@ -3432,6 +3454,10 @@ async function loadReportConsegne() {
   const lista = Object.values(gruppi).sort((a,b) => (a.titolo||'').localeCompare(b.titolo||'','it'));
   const totCopie = lista.reduce((s,g) => s + g.totale, 0);
   const tuttiClienti = new Set(daCons.map(r => r.ordini?.clienti?.cognome).filter(Boolean));
+
+  // Intestazione stampa
+  document.getElementById('rc-print-sub').textContent =
+    `Report libri non ancora arrivati · ${lista.length} titoli · ${totCopie} copie · ${tuttiClienti.size} clienti · ${new Date().toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'})}`;
 
   // Sommario
   elSom.innerHTML = `
